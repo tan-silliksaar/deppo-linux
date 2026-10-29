@@ -20,7 +20,8 @@ From the repository root (clean working tree, matching `Cargo.toml` version):
 ```bash
 ./packaging/prepare-ppa.sh
 ./packaging/build-ppa-source.sh noble
-dput ppa:deppo/deppo ../deppo_1.0.5-1_source.changes
+dput ppa:deppo/deppo ../deppo_1.0.6-1_source.changes
+
 ```
 
 `prepare-ppa.sh` runs `cargo vendor`, writes `.cargo/config.toml` for offline builds, and checks that `Cargo.lock` is present.

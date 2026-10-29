@@ -1,3 +1,9 @@
+deppo (1.0.6-1) noble; urgency=medium
+
+  * Version 1.0.6.
+
+ -- Deppo <info@deppo.eu>  Thu, 29 Oct 2026 12:06:50 +0000
+
 deppo (1.0.5-1) noble; urgency=medium
 
   * Initial packaging for the Deppo Linux client.

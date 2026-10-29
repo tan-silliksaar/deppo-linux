@@ -1,5 +1,5 @@
 # Copy to ~/.dput.cf or merge, then:
-#   dput deppo-ppa ../deppo_1.0.5-1_source.changes
+#   dput deppo-ppa ../deppo_1.0.6-1_source.changes
 
 [deppo-ppa]
 fqdn = ppa.launchpad.net
