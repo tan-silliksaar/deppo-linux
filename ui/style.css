@@ -1,0 +1,267 @@
+:root {
+    color-scheme: light;
+    --color-primary: #D96846;
+    --color-secondary: #829047;
+    --color-foreground: #2f3020;
+    --color-background: #edecf4;
+    --color-light: #CDCBD6;
+    --color-white-black: #fff;
+    --fail: #9c3b32;
+    font-family: "Roboto Flex", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --color-foreground: #CDCBD6;
+        --color-background: #101418;
+        --color-white-black: #000;
+        --color-light: #2a3038;
+        --fail: #e08a7a;
+    }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--color-background);
+    color: var(--color-foreground);
+}
+
+body {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+}
+
+.top { margin-bottom: 1.25rem; }
+
+.logo-link {
+    display: inline-block;
+    line-height: 0;
+}
+
+.logo {
+    display: block;
+    width: min(16rem, 70vw);
+    height: auto;
+}
+
+.logo .word { fill: var(--color-foreground); }
+.logo .arc { fill: var(--color-primary); }
+
+.kicker {
+    margin: 0.85rem 0 0.2rem;
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+}
+
+.version {
+    margin: 0.15rem 0 0;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    color: color-mix(in srgb, var(--color-foreground) 62%, transparent);
+}
+
+.account {
+    margin: 0;
+    color: color-mix(in srgb, var(--color-foreground) 72%, transparent);
+}
+
+.account a {
+    color: var(--color-primary);
+    font-weight: 650;
+}
+
+.card {
+    background: var(--color-white-black);
+    border: 1px solid color-mix(in srgb, var(--color-foreground) 16%, transparent);
+    border-radius: 14px;
+    padding: 1rem 1.05rem 1.1rem;
+    margin: 0 0 0.9rem;
+}
+
+.card h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+}
+
+.head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.when {
+    margin: 0.35rem 0 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.summary, .cache, .hint {
+    margin: 0.55rem 0 0;
+    color: color-mix(in srgb, var(--color-foreground) 78%, transparent);
+}
+
+.chart {
+    margin-top: 0.85rem;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    column-gap: 0.7rem;
+    row-gap: 0.4rem;
+    align-items: center;
+    font-size: 0.86rem;
+}
+
+.bar { display: contents; }
+
+.track {
+    display: block;
+    height: 0.55rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-foreground) 12%, transparent);
+    overflow: hidden;
+}
+
+.fill { display: block; height: 100%; border-radius: inherit; min-width: 0; }
+.fill.uploaded { background: var(--color-primary); }
+.fill.unchanged { background: color-mix(in srgb, var(--color-foreground) 45%, var(--color-light)); }
+.fill.failed { background: var(--fail); }
+.bar-n {
+    justify-self: end;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+label {
+    display: block;
+    margin: 0.9rem 0 0.35rem;
+    font-size: 0.86rem;
+    font-weight: 650;
+}
+
+button.ignore-toggle {
+    display: inline-block;
+    margin: 0.9rem 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-primary);
+    font-size: 0.86rem;
+    font-weight: 650;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+button.ignore-toggle:hover { filter: none; }
+
+button.ignore-toggle[aria-disabled="true"] {
+    cursor: default;
+    text-decoration: none;
+}
+
+.ignore-editor { margin-top: 0.4rem; }
+.ignore-actions { display: flex; gap: 0.5rem; margin-top: 0.55rem; }
+
+textarea, input {
+    width: 100%;
+    border: 1px solid color-mix(in srgb, var(--color-foreground) 28%, transparent);
+    border-radius: 10px;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font: inherit;
+    padding: 0.55rem 0.7rem;
+}
+
+textarea {
+    min-height: 12rem;
+    resize: vertical;
+    font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+    font-size: 0.84rem;
+    line-height: 1.4;
+}
+
+.row { display: flex; gap: 0.5rem; align-items: stretch; }
+.row input { flex: 1; }
+
+#add-sub-form button {
+    display: inline-block;
+    margin-top: 1.1rem;
+}
+
+button {
+    border: 0;
+    border-radius: 999px;
+    background: var(--color-primary);
+    color: #fff;
+    font: inherit;
+    font-weight: 650;
+    padding: 0.5rem 0.9rem;
+    cursor: pointer;
+}
+
+button.quiet {
+    background: transparent;
+    color: var(--color-foreground);
+    border: 1px solid color-mix(in srgb, var(--color-foreground) 28%, transparent);
+}
+
+button:hover { filter: brightness(1.05); }
+button:disabled { opacity: 0.55; cursor: default; filter: none; }
+
+.run-log {
+    margin: 0.75rem 0 0;
+    max-height: 14rem;
+    overflow: auto;
+    background: var(--color-background);
+    border-radius: 10px;
+    padding: 0.55rem 0.7rem;
+    font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.log-line.bad { color: var(--fail); }
+
+.error { min-height: 1.2rem; margin: 0.4rem 0 0; color: var(--fail); }
+.saved { margin: 0.4rem 0 0; color: var(--color-secondary); }
+
+:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+select, input[type="time"], input[type="number"] {
+    border: 1px solid var(--color-light);
+    border-radius: 10px;
+    background: var(--color-white-black);
+    color: var(--color-foreground);
+    font: inherit;
+    padding: 0.45rem 0.6rem;
+}
+
+.timer-modes, .drive-row { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; align-items: center; }
+.timer-modes input.interval { width: 11rem; flex: 0 0 auto; }
+.timer-modes input[type="time"] { width: 8.2rem; flex: 0 0 auto; }
+.timer-modes label, .drive-row label { display: flex; gap: 0.4rem; align-items: center; margin: 0; white-space: nowrap; }
+.winfsp-note, .hint { margin: 0.2rem 0 0.7rem; color: color-mix(in srgb, var(--color-foreground) 78%, transparent); }
+.upgrade { border-color: var(--color-primary); }
+.upgrade p:first-child { margin-top: 0; }
+#upgrade-now { display: inline-block; margin-top: 0.55rem; }
+.startup-off { border: 1px solid var(--fail); }
+.startup-off p:first-child { margin-top: 0; }
+.account a { color: inherit; }
+
+@media (max-width: 640px) {
+    .row { flex-direction: column; }
+}

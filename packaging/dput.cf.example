@@ -1,0 +1,9 @@
+# Copy to ~/.dput.cf or merge, then:
+#   dput deppo-ppa ../deppo_1.0.5-1_source.changes
+
+[deppo-ppa]
+fqdn = ppa.launchpad.net
+method = ftp
+incoming = ~deppo/ubuntu/deppo/
+login = anonymous
+allow_unsigned_uploads = 0

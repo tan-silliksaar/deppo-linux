@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+# Keep Cargo metadata inside the package build tree (Launchpad is offline).
+export CARGO_HOME = $(CURDIR)/debian/cargo_home
+export CARGO_TARGET_DIR = $(CURDIR)/target
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	rm -rf $(CARGO_HOME) $(CARGO_TARGET_DIR)
+
+override_dh_auto_configure:
+
+override_dh_auto_build:
+	mkdir -p $(CARGO_HOME)
+	test -f .cargo/config.toml
+	test -d vendor
+	cargo build --release --frozen --offline --bin deppo
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -D -m755 target/release/deppo debian/deppo/usr/bin/deppo
+	install -D -m644 packaging/deppo.user.service \
+		debian/deppo/usr/lib/systemd/user/deppo.service
+
+override_dh_dwz:
+	# Rust release binaries do not benefit from dwz; skip to avoid build failures.

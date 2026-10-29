@@ -1,0 +1,153 @@
+# Created by deppo.
+# This file uses .gitignore syntax. Review it before the next run.
+# A matching path is not uploaded. A line starting with ! keeps a path.
+# Lines starting with # are comments. A trailing slash matches directories only.
+
+# deppo cache. The ignore file itself is uploaded.
+.deppocache
+.deppocache.tmp
+.deppocache.lock
+
+# Operating systems
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
+
+# Editors
+*~
+*.swp
+*.swo
+.idea/
+*.code-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+dist/
+build/
+pip-wheel-metadata/
+
+# C# , .NET, and Visual Studio
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.rsuser
+*.userprefs
+project.lock.json
+artifacts/
+TestResults/
+*.nupkg
+*.snupkg
+.nuget/
+
+# Node.js and npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+coverage/
+
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# C and C++
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+
+# Java and Kotlin
+*.class
+.gradle/
+out/
+*.jar
+*.war
+.mtj.tmp/
+
+# Go
+bin/
+vendor/
+*.test
+
+# PHP and Ruby
+vendor/
+.bundle/
+.sass-cache/
+
+# General build and package output
+*.log
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Microsoft Office lock and recovery files. Documents themselves are kept.
+~$*
+~*.tmp
+*.asd
+*.wbk
+*.xlk
+
+# Adobe cache, recovery, and lock files. Documents themselves are kept.
+*.idlk
+*.ai~
+*.indd~
+*.psd~
+*.psb~
+Adobe Bridge Cache/
+.BridgeSort
+.BridgeLabelsAndRatings
+*.lnk
+
+# SketchUp automatic backups. Models (*.skp) are kept.
+*.skb
+
+# Other design-tool autosave files. Source files are kept.
+*.blend1
+*.blend2
+*.dwl
+*.dwl2
+*.bak
+*.sv$
