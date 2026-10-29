@@ -1,0 +1,9 @@
+# prepare-ppa.sh overwrites .cargo/config.toml with cargo vendor's output.
+# Local development should not use that file (it is gitignored) so crates.io
+# remains the default. Example shape after vendoring:
+
+# [source.crates-io]
+# replace-with = "vendored-sources"
+
+# [source.vendored-sources]
+# directory = "vendor"
