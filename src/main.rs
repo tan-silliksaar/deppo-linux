@@ -266,7 +266,7 @@ fn absolute_dir(raw: &str) -> Result<std::path::PathBuf> {
     } else {
         std::path::PathBuf::from(raw)
     };
-    let absolute = std::path::absolute(&path).with_context(|| format!("folder {}", path.display()))?;
+    let absolute = config::absolute_path(&path).with_context(|| format!("folder {}", path.display()))?;
     if !absolute.is_dir() {
         bail!("not a folder: {}", absolute.display());
     }
@@ -286,7 +286,7 @@ pub(crate) fn run_backup(cfg: &config::Subscription) -> Result<()> {
     let mut created = Vec::new();
     let mut ready = Vec::new();
     for folder in &cfg.folders {
-        let folder = std::path::absolute(folder).with_context(|| format!("folder {}", folder.display()))?;
+        let folder = config::absolute_path(folder).with_context(|| format!("folder {}", folder.display()))?;
         if !folder.is_dir() {
             upload::note_err(format!("skip {}: not a directory", folder.display()));
             continue;
@@ -380,10 +380,10 @@ fn folder_summary(folder: &Path, stats: &upload::FolderStats) -> String {
 
 fn open_run_log() -> Result<fs::File> {
     let path = config::log_path();
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+        }
     }
     let file = fs::OpenOptions::new()
         .create(true)

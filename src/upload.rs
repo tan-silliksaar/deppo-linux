@@ -167,7 +167,7 @@ pub fn sync_folder(server: &Url, user: &str, password: &str, folder: &Path, cach
         .git_exclude(false)
         .follow_links(false)
         .filter_entry(move |entry| {
-            let is_dir = entry.file_type().is_some_and(|kind| kind.is_dir());
+            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
             !matcher.matched(entry.path(), is_dir).is_ignore()
         });
     let walk = walker.build();
@@ -200,7 +200,7 @@ pub fn sync_folder(server: &Url, user: &str, password: &str, folder: &Path, cach
         if !walk_done && !fatal && pending < (WORKERS * 4) as u64 {
             match walk.next() {
                 Some(Ok(entry)) => {
-                    if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+                    if !entry.file_type().map(|kind| kind.is_file()).unwrap_or(false) {
                         continue;
                     }
                     let logical = logical_upload_path(entry.path());
@@ -213,7 +213,7 @@ pub fn sync_folder(server: &Url, user: &str, password: &str, folder: &Path, cach
                         }
                     };
                     let mtime_ms = meta.modified().map(cache::mtime_ms).unwrap_or(0);
-                    if cache.get(&logical).is_some_and(|cached| cached.mtime_ms == mtime_ms) {
+                    if cache.get(&logical).map(|cached| cached.mtime_ms == mtime_ms).unwrap_or(false) {
                         stats.unchanged += 1;
                         continue;
                     }

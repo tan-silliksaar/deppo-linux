@@ -6,7 +6,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
-series="${1:-noble}"
+series="${1:-jammy}"
 if [[ ! -d vendor ]] || [[ ! -f .cargo/config.toml ]]; then
   echo "Run ./packaging/prepare-ppa.sh first (vendor/ missing)." >&2
   exit 1

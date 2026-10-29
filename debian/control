@@ -5,12 +5,12 @@ Maintainer: Deppo <info@deppo.eu>
 Rules-Requires-Root: no
 Build-Depends:
  debhelper-compat (= 13),
- cargo,
- rustc,
+ cargo (>= 1.75),
+ rustc (>= 1.75),
  pkg-config,
  libfuse3-dev,
  libssl-dev
-Standards-Version: 4.7.0
+Standards-Version: 4.6.2
 Homepage: https://www.deppo.eu
 Vcs-Git: https://github.com/tan-silliksaar/deppo-linux.git
 Vcs-Browser: https://github.com/tan-silliksaar/deppo-linux
@@ -30,3 +30,6 @@ Description: Linux client for Deppo storage
  .
  This package installs the deppo binary. Optional login startup is set
  with "deppo enable-startup" (systemd --user).
+ .
+ Supported Ubuntu releases start at 22.04 LTS (jammy), matching the
+ distro rustc 1.75 toolchain used to build the package.

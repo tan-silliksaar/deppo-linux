@@ -293,7 +293,7 @@ impl Backend {
         FileAttr {
             ino,
             size: if node.is_dir { 0 } else { node.size },
-            blocks: if node.is_dir { 0 } else { node.size.div_ceil(512) },
+            blocks: if node.is_dir { 0 } else { node.size.saturating_add(511) / 512 },
             atime: time_from_ms(node.mtime_ms),
             mtime: time_from_ms(node.mtime_ms),
             ctime: time_from_ms(node.mtime_ms),
@@ -320,11 +320,12 @@ impl Backend {
     }
 
     fn children(&self, dir: &str) -> Result<Vec<Child>, libc::c_int> {
-        if let Ok(cache) = self.cache.lock()
-            && let Some((at, children)) = cache.get(dir)
-            && at.elapsed() < Duration::from_secs(2)
-        {
-            return Ok(children.clone());
+        if let Ok(cache) = self.cache.lock() {
+            if let Some((at, children)) = cache.get(dir) {
+                if at.elapsed() < Duration::from_secs(2) {
+                    return Ok(children.clone());
+                }
+            }
         }
         let reply = self.call("GET", dir, true, &[("X-Current-Only", "1")], &[], 8 * 1024 * 1024)?;
         if reply.status == 404 {

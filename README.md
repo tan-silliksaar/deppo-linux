@@ -15,6 +15,8 @@ Version 1.0.6. Apache License 2.0.
 
 ## Install from a PPA (when published)
 
+Supported from **Ubuntu 22.04 LTS (jammy)** upward.
+
 ```bash
 sudo add-apt-repository ppa:deppo/deppo
 sudo apt update

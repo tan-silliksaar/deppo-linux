@@ -428,12 +428,12 @@ fn valid_folder(raw: &str) -> Result<PathBuf, String> {
     if !path.is_dir() {
         return Err(format!("Not a folder: {}", path.display()));
     }
-    std::path::absolute(&path).map_err(|err| format!("Not a folder: {} ({err})", path.display()))
+    config::absolute_path(&path).map_err(|err| format!("Not a folder: {} ({err})", path.display()))
 }
 
 fn paths_equal(left: &Path, right: &Path) -> bool {
-    let left = std::path::absolute(left).unwrap_or_else(|_| left.to_path_buf());
-    let right = std::path::absolute(right).unwrap_or_else(|_| right.to_path_buf());
+    let left = config::absolute_path(left).unwrap_or_else(|_| left.to_path_buf());
+    let right = config::absolute_path(right).unwrap_or_else(|_| right.to_path_buf());
     left == right
 }
 

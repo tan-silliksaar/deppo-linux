@@ -1,3 +1,10 @@
+deppo (1.0.6-2) jammy; urgency=medium
+
+  * Target Ubuntu 22.04 LTS (jammy) and newer.
+  * Build with Rust 1.75 APIs only so jammy/noble distro toolchains work.
+
+ -- Deppo <info@deppo.eu>  Thu, 29 Oct 2026 13:19:41 +0000
+
 deppo (1.0.6-1) noble; urgency=medium
 
   * Version 1.0.6.

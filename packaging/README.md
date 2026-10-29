@@ -2,6 +2,14 @@
 
 Launchpad builds from a **signed source package** with **no network**. Crates must be vendored into `vendor/` before upload.
 
+## Supported Ubuntu series
+
+Minimum: **Ubuntu 22.04 LTS (jammy)** — distro `rustc`/`cargo` 1.75+.
+
+Also build for **noble** (24.04) and newer LTS/interim releases the same way. Each series gets its own source upload (or a recipe build per series); `./packaging/build-ppa-source.sh SERIES` rewrites the changelog distribution for that upload.
+
+Do not target releases older than jammy: their default Rust is too old for this crate.
+
 ## One-time Launchpad setup
 
 1. Launchpad user [~deppo](https://launchpad.net/~deppo) and project [deppo](https://launchpad.net/deppo).
@@ -19,23 +27,29 @@ From the repository root (clean working tree, matching `Cargo.toml` version):
 
 ```bash
 ./packaging/prepare-ppa.sh
-./packaging/build-ppa-source.sh noble
-dput ppa:deppo/deppo ../deppo_1.0.6-1_source.changes
+./packaging/build-ppa-source.sh jammy
+dput ppa:deppo/deppo ../deppo_1.0.6-2_source.changes
+```
 
+Repeat for other series (same upstream, new changelog distribution via the script):
+
+```bash
+./packaging/build-ppa-source.sh noble
+./packaging/build-ppa-source.sh resolute
 ```
 
 `prepare-ppa.sh` runs `cargo vendor`, writes `.cargo/config.toml` for offline builds, and checks that `Cargo.lock` is present.
 
-`build-ppa-source.sh` runs `dpkg-buildpackage -S` (source-only). Launchpad compiles the binary in its chroot.
+## Recipe text (optional)
 
-Repeat `build-ppa-source.sh` with another series name (`jammy`, `plucky`, …) after editing `debian/changelog` for that series, or pass the series as the first argument (the script rewrites the changelog distribution for that run).
+If the Git branch already contains `debian/` and vendored crates:
 
-## Rust version
+```text
+# git-build-recipe format 0.4 deb-version {debversion}~{revtime}
+lp:~deppo/deppo/+git/deppo main
+```
 
-This crate uses Rust **edition 2024**, so the build chroot needs **rustc/cargo ≥ 1.85**. If an Ubuntu series ships an older toolchain, either:
-
-- publish only for newer series, or
-- add a Launchpad Rust toolchain PPA as a dependency of your PPA and adjust `Build-Depends` in `debian/control`.
+Request builds for **jammy**, **noble**, and any newer series you support. Launchpad rewrites the changelog distribution per series when using recipes.
 
 ## What users install
 
@@ -45,11 +59,9 @@ sudo apt update
 sudo apt install deppo
 ```
 
-`fuse3` and `libfuse3` are pulled in automatically via package dependencies.
+`fuse3` and the matching `libfuse3` soname are pulled in via package dependencies.
 
 ## Local binary package (optional)
-
-For a quick local `.deb` (not for Launchpad):
 
 ```bash
 ./packaging/prepare-ppa.sh

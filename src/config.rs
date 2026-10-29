@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::os::unix::fs::OpenOptionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use base64::Engine;
@@ -55,28 +55,28 @@ struct FileSubscription {
 }
 
 pub fn config_dir() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
-        && !xdg.is_empty()
-    {
-        return PathBuf::from(xdg).join("deppo");
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+        if !xdg.is_empty() {
+            return PathBuf::from(xdg).join("deppo");
+        }
     }
     home_dir().join(".config").join("deppo")
 }
 
 pub fn home_dir() -> PathBuf {
-    if let Ok(home) = std::env::var("HOME")
-        && !home.is_empty()
-    {
-        return PathBuf::from(home);
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.is_empty() {
+            return PathBuf::from(home);
+        }
     }
     PathBuf::from(".")
 }
 
 pub fn runtime_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR")
-        && !dir.is_empty()
-    {
-        return PathBuf::from(dir);
+    if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
+        if !dir.is_empty() {
+            return PathBuf::from(dir);
+        }
     }
     std::env::temp_dir().join(format!("deppo-{}", users_uid()))
 }
@@ -90,12 +90,21 @@ pub fn config_path() -> PathBuf {
 }
 
 pub fn log_path() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_STATE_HOME")
-        && !xdg.is_empty()
-    {
-        return PathBuf::from(xdg).join("deppo").join("deppo.log");
+    if let Ok(xdg) = std::env::var("XDG_STATE_HOME") {
+        if !xdg.is_empty() {
+            return PathBuf::from(xdg).join("deppo").join("deppo.log");
+        }
     }
     home_dir().join(".local").join("state").join("deppo").join("deppo.log")
+}
+
+/// Absolute path helper that works on Ubuntu 22.04's Rust 1.75 (no std::path::absolute).
+pub fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        Ok(std::env::current_dir()?.join(path))
+    }
 }
 
 pub fn load_all() -> Result<Vec<Subscription>> {
