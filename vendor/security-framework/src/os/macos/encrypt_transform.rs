@@ -146,7 +146,6 @@ impl Builder {
     }
 
     /// Encrypts data with a provided key.
-    // FIXME: deprecate and remove: don't expose CFData in Rust APIs.
     pub fn encrypt(&self, key: &SecKey, data: &CFData) -> Result<CFData, CFError> {
         unsafe {
             let mut error = ptr::null_mut();
@@ -161,7 +160,6 @@ impl Builder {
     }
 
     /// Decrypts data with a provided key.
-    // FIXME: deprecate and remove: don't expose CFData in Rust APIs.
     pub fn decrypt(&self, key: &SecKey, data: &CFData) -> Result<CFData, CFError> {
         unsafe {
             let mut error = ptr::null_mut();
@@ -177,17 +175,17 @@ impl Builder {
 
     fn finish(&self, mut transform: SecTransform, data: &CFData) -> Result<CFData, CFError> {
         unsafe {
-            if let Some(padding) = &self.padding {
+            if let Some(ref padding) = self.padding {
                 let key = CFString::wrap_under_get_rule(kSecPaddingKey);
                 transform.set_attribute(&key, &padding.to_str())?;
             }
 
-            if let Some(mode) = &self.mode {
+            if let Some(ref mode) = self.mode {
                 let key = CFString::wrap_under_get_rule(kSecEncryptionMode);
                 transform.set_attribute(&key, &mode.to_str())?;
             }
 
-            if let Some(iv) = &self.iv {
+            if let Some(ref iv) = self.iv {
                 let key = CFString::wrap_under_get_rule(kSecIVKey);
                 transform.set_attribute(&key, iv)?;
             }
@@ -196,7 +194,9 @@ impl Builder {
             transform.set_attribute(&key, data)?;
 
             let result = transform.execute()?;
-            Ok(CFData::wrap_under_get_rule(result.as_CFTypeRef() as CFDataRef))
+            Ok(CFData::wrap_under_get_rule(
+                result.as_CFTypeRef() as CFDataRef
+            ))
         }
     }
 }
@@ -207,7 +207,6 @@ mod test {
 
     use super::*;
     use crate::os::macos::item::KeyType;
-    #[allow(deprecated)]
     use crate::os::macos::key::SecKeyExt;
 
     #[test]
@@ -228,7 +227,6 @@ mod test {
 
         let key = Vec::<u8>::from_hex(key).unwrap();
         let key = CFData::from_buffer(&key);
-        #[allow(deprecated)]
         let key = SecKey::from_data(KeyType::aes(), &key).unwrap();
 
         let iv = Vec::<u8>::from_hex(iv).unwrap();

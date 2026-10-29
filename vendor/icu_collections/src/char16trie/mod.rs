@@ -18,7 +18,7 @@
 //! ### Querying a `Char16Trie`
 //!
 //! ```rust
-//! use icu::collections::char16trie::Char16Trie;
+//! use icu::collections::char16trie::{Char16Trie, TrieResult};
 //! use zerovec::ZeroVec;
 //!
 //! // A Char16Trie containing the ASCII characters mapping 'a' to 1 and 'ab'
@@ -26,16 +26,13 @@
 //! let trie_data = [48, 97, 176, 98, 32868];
 //! let trie = Char16Trie::new(ZeroVec::from_slice_or_alloc(&trie_data));
 //!
-//! let mut cursor = trie.cursor();
-//! cursor.step('a');
-//! assert_eq!(cursor.value(), Some(1));
-//! assert!(!cursor.is_empty());
-//! cursor.step('b');
-//! assert_eq!(cursor.value(), Some(100));
-//! assert!(cursor.is_empty());
-//! cursor.step('c');
-//! assert_eq!(cursor.value(), None);
-//! assert!(cursor.is_empty());
+//! let mut iter = trie.iter();
+//! let res = iter.next('a');
+//! assert_eq!(res, TrieResult::Intermediate(1));
+//! let res = iter.next('b');
+//! assert_eq!(res, TrieResult::FinalValue(100));
+//! let res = iter.next('c');
+//! assert_eq!(res, TrieResult::NoMatch);
 //! ```
 //!
 //! [`ICU4X`]: ../icu/index.html
@@ -43,8 +40,5 @@
 mod trie;
 
 pub use trie::Char16Trie;
-pub use trie::Char16TrieCursor;
-#[allow(deprecated)]
 pub use trie::Char16TrieIterator;
-#[allow(deprecated)]
 pub use trie::TrieResult;

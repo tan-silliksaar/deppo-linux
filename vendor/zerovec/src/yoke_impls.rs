@@ -9,22 +9,18 @@
 #![allow(clippy::forget_copy)]
 #![allow(clippy::forget_non_drop)]
 
-#[cfg(feature = "alloc")]
+use crate::flexzerovec::FlexZeroVec;
 use crate::map::ZeroMapBorrowed;
-#[cfg(feature = "alloc")]
 use crate::map::ZeroMapKV;
-#[cfg(feature = "alloc")]
 use crate::map2d::ZeroMap2dBorrowed;
 use crate::ule::*;
-use crate::{VarZeroCow, VarZeroVec, ZeroVec};
-#[cfg(feature = "alloc")]
-use crate::{ZeroMap, ZeroMap2d};
+use crate::{VarZeroVec, ZeroMap, ZeroMap2d, ZeroVec};
 use core::{mem, ptr};
 use yoke::*;
 
 // This impl is similar to the impl on Cow and is safe for the same reasons
 /// This impl requires enabling the optional `yoke` Cargo feature of the `zerovec` crate
-unsafe impl<'a, T: 'static + AsULE> Yokeable<'a> for ZeroVec<'static, T> {
+unsafe impl<'a, T: 'static + AsULE + ?Sized> Yokeable<'a> for ZeroVec<'static, T> {
     type Output = ZeroVec<'a, T>;
     #[inline]
     fn transform(&'a self) -> &'a Self::Output {
@@ -36,7 +32,7 @@ unsafe impl<'a, T: 'static + AsULE> Yokeable<'a> for ZeroVec<'static, T> {
     }
     #[inline]
     unsafe fn make(from: Self::Output) -> Self {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         let from = mem::ManuallyDrop::new(from);
         let ptr: *const Self = (&*from as *const Self::Output).cast();
         ptr::read(ptr)
@@ -64,7 +60,7 @@ unsafe impl<'a, T: 'static + VarULE + ?Sized> Yokeable<'a> for VarZeroVec<'stati
     }
     #[inline]
     unsafe fn make(from: Self::Output) -> Self {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         let from = mem::ManuallyDrop::new(from);
         let ptr: *const Self = (&*from as *const Self::Output).cast();
         ptr::read(ptr)
@@ -80,8 +76,8 @@ unsafe impl<'a, T: 'static + VarULE + ?Sized> Yokeable<'a> for VarZeroVec<'stati
 
 // This impl is similar to the impl on Cow and is safe for the same reasons
 /// This impl requires enabling the optional `yoke` Cargo feature of the `zerovec` crate
-unsafe impl<'a, T: 'static + ?Sized> Yokeable<'a> for VarZeroCow<'static, T> {
-    type Output = VarZeroCow<'a, T>;
+unsafe impl<'a> Yokeable<'a> for FlexZeroVec<'static> {
+    type Output = FlexZeroVec<'a>;
     #[inline]
     fn transform(&'a self) -> &'a Self::Output {
         self
@@ -92,7 +88,7 @@ unsafe impl<'a, T: 'static + ?Sized> Yokeable<'a> for VarZeroCow<'static, T> {
     }
     #[inline]
     unsafe fn make(from: Self::Output) -> Self {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         let from = mem::ManuallyDrop::new(from);
         let ptr: *const Self = (&*from as *const Self::Output).cast();
         ptr::read(ptr)
@@ -107,7 +103,7 @@ unsafe impl<'a, T: 'static + ?Sized> Yokeable<'a> for VarZeroCow<'static, T> {
 }
 
 /// This impl requires enabling the optional `yoke` Cargo feature of the `zerovec` crate
-#[cfg(feature = "alloc")]
+#[allow(clippy::transmute_ptr_to_ptr)]
 unsafe impl<'a, K, V> Yokeable<'a> for ZeroMap<'static, K, V>
 where
     K: 'static + for<'b> ZeroMapKV<'b> + ?Sized,
@@ -127,7 +123,7 @@ where
     }
     #[inline]
     fn transform_owned(self) -> Self::Output {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         unsafe {
             // Similar problem as transform(), but we need to use ptr::read since
             // the compiler isn't sure of the sizes
@@ -138,7 +134,7 @@ where
     }
     #[inline]
     unsafe fn make(from: Self::Output) -> Self {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         let from = mem::ManuallyDrop::new(from);
         let ptr: *const Self = (&*from as *const Self::Output).cast();
         ptr::read(ptr)
@@ -153,7 +149,7 @@ where
 }
 
 /// This impl requires enabling the optional `yoke` Cargo feature of the `zerovec` crate
-#[cfg(feature = "alloc")]
+#[allow(clippy::transmute_ptr_to_ptr)]
 unsafe impl<'a, K, V> Yokeable<'a> for ZeroMapBorrowed<'static, K, V>
 where
     K: 'static + for<'b> ZeroMapKV<'b> + ?Sized,
@@ -173,7 +169,7 @@ where
     }
     #[inline]
     fn transform_owned(self) -> Self::Output {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         unsafe {
             // Similar problem as transform(), but we need to use ptr::read since
             // the compiler isn't sure of the sizes
@@ -184,7 +180,7 @@ where
     }
     #[inline]
     unsafe fn make(from: Self::Output) -> Self {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         let from = mem::ManuallyDrop::new(from);
         let ptr: *const Self = (&*from as *const Self::Output).cast();
         ptr::read(ptr)
@@ -199,7 +195,7 @@ where
 }
 
 /// This impl requires enabling the optional `yoke` Cargo feature of the `zerovec` crate
-#[cfg(feature = "alloc")]
+#[allow(clippy::transmute_ptr_to_ptr)]
 unsafe impl<'a, K0, K1, V> Yokeable<'a> for ZeroMap2d<'static, K0, K1, V>
 where
     K0: 'static + for<'b> ZeroMapKV<'b> + ?Sized,
@@ -221,7 +217,7 @@ where
     }
     #[inline]
     fn transform_owned(self) -> Self::Output {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         unsafe {
             // Similar problem as transform(), but we need to use ptr::read since
             // the compiler isn't sure of the sizes
@@ -232,7 +228,7 @@ where
     }
     #[inline]
     unsafe fn make(from: Self::Output) -> Self {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         let from = mem::ManuallyDrop::new(from);
         let ptr: *const Self = (&*from as *const Self::Output).cast();
         ptr::read(ptr)
@@ -247,7 +243,7 @@ where
 }
 
 /// This impl requires enabling the optional `yoke` Cargo feature of the `zerovec` crate
-#[cfg(feature = "alloc")]
+#[allow(clippy::transmute_ptr_to_ptr)]
 unsafe impl<'a, K0, K1, V> Yokeable<'a> for ZeroMap2dBorrowed<'static, K0, K1, V>
 where
     K0: 'static + for<'b> ZeroMapKV<'b> + ?Sized,
@@ -269,7 +265,7 @@ where
     }
     #[inline]
     fn transform_owned(self) -> Self::Output {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         unsafe {
             // Similar problem as transform(), but we need to use ptr::read since
             // the compiler isn't sure of the sizes
@@ -280,7 +276,7 @@ where
     }
     #[inline]
     unsafe fn make(from: Self::Output) -> Self {
-        debug_assert!(size_of::<Self::Output>() == size_of::<Self>());
+        debug_assert!(mem::size_of::<Self::Output>() == mem::size_of::<Self>());
         let from = mem::ManuallyDrop::new(from);
         let ptr: *const Self = (&*from as *const Self::Output).cast();
         ptr::read(ptr)
@@ -298,7 +294,7 @@ where
 #[allow(non_camel_case_types, non_snake_case)]
 mod test {
     use super::*;
-    use crate::{VarZeroSlice, ZeroSlice};
+    use crate::{vecs::FlexZeroSlice, VarZeroSlice, ZeroSlice};
     use databake::*;
 
     // Note: The following derives cover Yoke as well as Serde and databake. These may partially
@@ -306,14 +302,14 @@ mod test {
 
     #[derive(yoke::Yokeable, zerofrom::ZeroFrom)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
     struct DeriveTest_ZeroVec<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: ZeroVec<'data, u16>,
+        _data: ZeroVec<'data, u16>,
     }
 
     #[test]
+    #[ignore] // https://github.com/rust-lang/rust/issues/98906
     fn bake_ZeroVec() {
         test_bake!(
             DeriveTest_ZeroVec<'static>,
@@ -326,11 +322,10 @@ mod test {
 
     #[derive(yoke::Yokeable)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
     struct DeriveTest_ZeroSlice<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: &'data ZeroSlice<u16>,
+        _data: &'data ZeroSlice<u16>,
     }
 
     #[test]
@@ -346,19 +341,18 @@ mod test {
 
     #[derive(yoke::Yokeable, zerofrom::ZeroFrom)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
-    struct DeriveTest_VarZeroVec<'data> {
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
+    struct DeriveTest_FlexZeroVec<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: VarZeroVec<'data, str>,
+        _data: FlexZeroVec<'data>,
     }
 
     #[test]
-    fn bake_VarZeroVec() {
+    fn bake_FlexZeroVec() {
         test_bake!(
-            DeriveTest_VarZeroVec<'static>,
-            crate::yoke_impls::test::DeriveTest_VarZeroVec {
-                _data: crate::vecs::VarZeroVec16::new(),
+            DeriveTest_FlexZeroVec<'static>,
+            crate::yoke_impls::test::DeriveTest_FlexZeroVec {
+                _data: crate::vecs::FlexZeroVec::new(),
             },
             zerovec,
         );
@@ -366,19 +360,18 @@ mod test {
 
     #[derive(yoke::Yokeable)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
-    struct DeriveTest_VarZeroSlice<'data> {
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
+    struct DeriveTest_FlexZeroSlice<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: &'data VarZeroSlice<str>,
+        _data: &'data FlexZeroSlice,
     }
 
     #[test]
-    fn bake_VarZeroSlice() {
+    fn bake_FlexZeroSlice() {
         test_bake!(
-            DeriveTest_VarZeroSlice<'static>,
-            crate::yoke_impls::test::DeriveTest_VarZeroSlice {
-                _data: crate::vecs::VarZeroSlice16::new_empty()
+            DeriveTest_FlexZeroSlice<'static>,
+            crate::yoke_impls::test::DeriveTest_FlexZeroSlice {
+                _data: unsafe { crate::vecs::FlexZeroSlice::from_byte_slice_unchecked(b"\x01\0") },
             },
             zerovec,
         );
@@ -386,12 +379,49 @@ mod test {
 
     #[derive(yoke::Yokeable, zerofrom::ZeroFrom)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
+    struct DeriveTest_VarZeroVec<'data> {
+        #[cfg_attr(feature = "serde", serde(borrow))]
+        _data: VarZeroVec<'data, str>,
+    }
+
+    #[test]
+    fn bake_VarZeroVec() {
+        test_bake!(
+            DeriveTest_VarZeroVec<'static>,
+            crate::yoke_impls::test::DeriveTest_VarZeroVec {
+                _data: crate::VarZeroVec::new(),
+            },
+            zerovec,
+        );
+    }
+
+    #[derive(yoke::Yokeable)]
+    #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
+    struct DeriveTest_VarZeroSlice<'data> {
+        #[cfg_attr(feature = "serde", serde(borrow))]
+        _data: &'data VarZeroSlice<str>,
+    }
+
+    #[test]
+    fn bake_VarZeroSlice() {
+        test_bake!(
+            DeriveTest_VarZeroSlice<'static>,
+            crate::yoke_impls::test::DeriveTest_VarZeroSlice {
+                _data: crate::VarZeroSlice::new_empty()
+            },
+            zerovec,
+        );
+    }
+
+    #[derive(yoke::Yokeable, zerofrom::ZeroFrom)]
+    #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
     #[yoke(prove_covariance_manually)]
     struct DeriveTest_ZeroMap<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: ZeroMap<'data, [u8], str>,
+        _data: ZeroMap<'data, [u8], str>,
     }
 
     #[test]
@@ -402,8 +432,8 @@ mod test {
                 _data: unsafe {
                     #[allow(unused_unsafe)]
                     crate::ZeroMap::from_parts_unchecked(
-                        crate::vecs::VarZeroVec16::new(),
-                        crate::vecs::VarZeroVec16::new(),
+                        crate::VarZeroVec::new(),
+                        crate::VarZeroVec::new(),
                     )
                 },
             },
@@ -413,12 +443,11 @@ mod test {
 
     #[derive(yoke::Yokeable)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
     #[yoke(prove_covariance_manually)]
     struct DeriveTest_ZeroMapBorrowed<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: ZeroMapBorrowed<'data, [u8], str>,
+        _data: ZeroMapBorrowed<'data, [u8], str>,
     }
 
     #[test]
@@ -429,8 +458,8 @@ mod test {
                 _data: unsafe {
                     #[allow(unused_unsafe)]
                     crate::maps::ZeroMapBorrowed::from_parts_unchecked(
-                        crate::vecs::VarZeroSlice16::new_empty(),
-                        crate::vecs::VarZeroSlice16::new_empty(),
+                        crate::VarZeroSlice::new_empty(),
+                        crate::VarZeroSlice::new_empty(),
                     )
                 },
             },
@@ -440,12 +469,11 @@ mod test {
 
     #[derive(yoke::Yokeable, zerofrom::ZeroFrom)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
     #[yoke(prove_covariance_manually)]
     struct DeriveTest_ZeroMapWithULE<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: ZeroMap<'data, ZeroSlice<u32>, str>,
+        _data: ZeroMap<'data, ZeroSlice<u32>, str>,
     }
 
     #[test]
@@ -456,8 +484,8 @@ mod test {
                 _data: unsafe {
                     #[allow(unused_unsafe)]
                     crate::ZeroMap::from_parts_unchecked(
-                        crate::vecs::VarZeroVec16::new(),
-                        crate::vecs::VarZeroVec16::new(),
+                        crate::VarZeroVec::new(),
+                        crate::VarZeroVec::new(),
                     )
                 },
             },
@@ -467,12 +495,11 @@ mod test {
 
     #[derive(yoke::Yokeable, zerofrom::ZeroFrom)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
     #[yoke(prove_covariance_manually)]
     struct DeriveTest_ZeroMap2d<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: ZeroMap2d<'data, u16, u16, str>,
+        _data: ZeroMap2d<'data, u16, u16, str>,
     }
 
     #[test]
@@ -486,7 +513,7 @@ mod test {
                         crate::ZeroVec::new(),
                         crate::ZeroVec::new(),
                         crate::ZeroVec::new(),
-                        crate::vecs::VarZeroVec16::new(),
+                        crate::VarZeroVec::new(),
                     )
                 },
             },
@@ -496,12 +523,11 @@ mod test {
 
     #[derive(yoke::Yokeable)]
     #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-    #[cfg_attr(feature = "databake", derive(databake::Bake))]
-    #[cfg_attr(feature = "databake", databake(path = zerovec::yoke_impls::test))]
+    #[cfg_attr(feature = "databake", derive(databake::Bake), databake(path = zerovec::yoke_impls::test))]
     #[yoke(prove_covariance_manually)]
     struct DeriveTest_ZeroMap2dBorrowed<'data> {
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub _data: ZeroMap2dBorrowed<'data, u16, u16, str>,
+        _data: ZeroMap2dBorrowed<'data, u16, u16, str>,
     }
 
     #[test]
@@ -515,7 +541,7 @@ mod test {
                         crate::ZeroSlice::new_empty(),
                         crate::ZeroSlice::new_empty(),
                         crate::ZeroSlice::new_empty(),
-                        crate::vecs::VarZeroSlice16::new_empty(),
+                        crate::VarZeroSlice::new_empty(),
                     )
                 },
             },

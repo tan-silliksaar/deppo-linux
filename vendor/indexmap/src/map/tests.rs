@@ -43,8 +43,8 @@ fn insert() {
 
 #[test]
 fn insert_full() {
-    let insert = [9, 2, 7, 1, 4, 6, 13];
-    let present = [1, 6, 2];
+    let insert = vec![9, 2, 7, 1, 4, 6, 13];
+    let present = vec![1, 6, 2];
     let mut map = IndexMap::with_capacity(insert.len());
 
     for (i, &elt) in insert.iter().enumerate() {
@@ -207,10 +207,10 @@ fn reserve() {
         assert_eq!(map.capacity(), capacity);
         assert_eq!(map.get(&i), Some(&(i * i)));
     }
-    map.insert(capacity, usize::MAX);
+    map.insert(capacity, std::usize::MAX);
     assert_eq!(map.len(), capacity + 1);
     assert!(map.capacity() > capacity);
-    assert_eq!(map.get(&capacity), Some(&usize::MAX));
+    assert_eq!(map.get(&capacity), Some(&std::usize::MAX));
 }
 
 #[test]
@@ -230,7 +230,7 @@ fn shrink_to_fit() {
         assert_eq!(map.len(), i);
         map.insert(i, i * i);
         assert_eq!(map.len(), i + 1);
-        assert!(map.capacity() > i);
+        assert!(map.capacity() >= i + 1);
         assert_eq!(map.get(&i), Some(&(i * i)));
         map.shrink_to_fit();
         assert_eq!(map.len(), i + 1);
@@ -327,11 +327,11 @@ fn partial_eq_and_eq() {
 #[test]
 fn extend() {
     let mut map = IndexMap::new();
-    map.extend([(&1, &2), (&3, &4)]);
-    map.extend([(5, 6)]);
+    map.extend(vec![(&1, &2), (&3, &4)]);
+    map.extend(vec![(5, 6)]);
     assert_eq!(
         map.into_iter().collect::<Vec<_>>(),
-        [(1, 2), (3, 4), (5, 6)]
+        vec![(1, 2), (3, 4), (5, 6)]
     );
 }
 
@@ -374,11 +374,16 @@ fn entry_and_modify() {
 fn entry_or_default() {
     let mut map = IndexMap::new();
 
-    #[derive(Debug, Default, PartialEq)]
+    #[derive(Debug, PartialEq)]
     enum TestEnum {
-        #[default]
         DefaultValue,
         NonDefaultValue,
+    }
+
+    impl Default for TestEnum {
+        fn default() -> Self {
+            TestEnum::DefaultValue
+        }
     }
 
     map.insert(1, TestEnum::NonDefaultValue);
@@ -480,7 +485,8 @@ fn from_entries() {
 
 #[test]
 fn keys() {
-    let map = IndexMap::<_, _>::from_iter([(1, 'a'), (2, 'b'), (3, 'c')]);
+    let vec = vec![(1, 'a'), (2, 'b'), (3, 'c')];
+    let map: IndexMap<_, _> = vec.into_iter().collect();
     let keys: Vec<_> = map.keys().copied().collect();
     assert_eq!(keys.len(), 3);
     assert!(keys.contains(&1));
@@ -490,7 +496,8 @@ fn keys() {
 
 #[test]
 fn into_keys() {
-    let map = IndexMap::<_, _>::from_iter([(1, 'a'), (2, 'b'), (3, 'c')]);
+    let vec = vec![(1, 'a'), (2, 'b'), (3, 'c')];
+    let map: IndexMap<_, _> = vec.into_iter().collect();
     let keys: Vec<i32> = map.into_keys().collect();
     assert_eq!(keys.len(), 3);
     assert!(keys.contains(&1));
@@ -500,7 +507,8 @@ fn into_keys() {
 
 #[test]
 fn values() {
-    let map = IndexMap::<_, _>::from_iter([(1, 'a'), (2, 'b'), (3, 'c')]);
+    let vec = vec![(1, 'a'), (2, 'b'), (3, 'c')];
+    let map: IndexMap<_, _> = vec.into_iter().collect();
     let values: Vec<_> = map.values().copied().collect();
     assert_eq!(values.len(), 3);
     assert!(values.contains(&'a'));
@@ -510,7 +518,8 @@ fn values() {
 
 #[test]
 fn values_mut() {
-    let mut map = IndexMap::<_, _>::from_iter([(1, 1), (2, 2), (3, 3)]);
+    let vec = vec![(1, 1), (2, 2), (3, 3)];
+    let mut map: IndexMap<_, _> = vec.into_iter().collect();
     for value in map.values_mut() {
         *value *= 2
     }
@@ -523,7 +532,8 @@ fn values_mut() {
 
 #[test]
 fn into_values() {
-    let map = IndexMap::<_, _>::from_iter([(1, 'a'), (2, 'b'), (3, 'c')]);
+    let vec = vec![(1, 'a'), (2, 'b'), (3, 'c')];
+    let map: IndexMap<_, _> = vec.into_iter().collect();
     let values: Vec<char> = map.into_values().collect();
     assert_eq!(values.len(), 3);
     assert!(values.contains(&'a'));
@@ -688,7 +698,8 @@ fn shift_remove_full() {
 
 #[test]
 fn sorted_unstable_by() {
-    let map = IndexMap::<i32, i32>::from_iter([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]);
+    let mut map: IndexMap<i32, i32> = IndexMap::new();
+    map.extend(vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]);
     let sorted = map.sorted_unstable_by(|_a, b, _c, d| d.cmp(&b));
 
     assert_eq!(
@@ -739,24 +750,28 @@ fn insert_before_oob() {
 
 #[test]
 fn clear() {
-    let mut map = IndexMap::<i32, i32>::from_iter([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]);
-    assert_ne!(map.len(), 0);
+    let mut map: IndexMap<i32, i32> = IndexMap::new();
+    map.extend(vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]);
     map.clear();
     assert_eq!(map.len(), 0);
 }
 
 #[test]
 fn get_range() {
-    let map = IndexMap::<i32, i32>::from_iter([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]);
+    let mut index_map: IndexMap<i32, i32> = IndexMap::new();
+    index_map.insert(1, 10);
+    index_map.insert(2, 20);
+    index_map.insert(3, 30);
+    index_map.insert(4, 40);
+    index_map.insert(5, 50);
 
-    let result = map.get_range(2..2);
+    let result = index_map.get_range(2..2);
     assert!(result.unwrap().is_empty());
 
-    #[expect(clippy::reversed_empty_ranges)]
-    let result = map.get_range(4..2);
+    let result = index_map.get_range(4..2);
     assert!(result.is_none());
 
-    let result = map.get_range(2..4);
+    let result = index_map.get_range(2..4);
     let slice: &Slice<i32, i32> = result.unwrap();
     assert_eq!(slice.len(), 2);
     assert_eq!(slice, &[(3, 30), (4, 40)]);
@@ -774,7 +789,6 @@ fn get_range_mut() {
     let result = index_map.get_range_mut(2..2);
     assert!(result.unwrap().is_empty());
 
-    #[expect(clippy::reversed_empty_ranges)]
     let result = index_map.get_range_mut(4..2);
     assert!(result.is_none());
 

@@ -1,44 +1,16 @@
 #![allow(non_camel_case_types, non_upper_case_globals, non_snake_case)]
 #![cfg_attr(not(feature = "std"), no_std)]
-/*
-Unsafe functions no longer implicitly create unsafe blocks (RFC 2585).
-While newer bindgen versions follow this convention, we support Rust 1.63 which warns about
-this behavior. We can simply silence these warnings.
-*/
-#![allow(unused_unsafe)]
 
 #[cfg(feature = "std")]
 pub use std::os::raw as ctypes;
 
 #[cfg(all(not(feature = "std"), feature = "no_std"))]
 pub mod ctypes {
-    // The signedness of `char` is platform-specific, and we have to match
-    // what Rust's `CStr` uses.
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "arm",
-        target_arch = "msp430",
-        target_arch = "powerpc",
-        target_arch = "powerpc64",
-        target_arch = "riscv32",
-        target_arch = "riscv64",
-        target_arch = "s390x",
-    ))]
-    pub type c_char = c_uchar;
-    #[cfg(any(
-        target_arch = "loongarch64",
-        target_arch = "m68k",
-        target_arch = "mips",
-        target_arch = "mips64",
-        target_arch = "mips32r6",
-        target_arch = "mips64r6",
-        target_arch = "sparc",
-        target_arch = "sparc64",
-        target_arch = "x86",
-        target_arch = "x86_64",
-        target_arch = "xtensa",
-    ))]
-    pub type c_char = c_schar;
+    // The signedness of `char` is platform-specific, however a consequence
+    // of it being platform-specific is that any code which depends on the
+    // signedness of `char` is already non-portable. So we can just use `u8`
+    // here and no portable code will notice.
+    pub type c_char = u8;
 
     // The following assumes that Linux is always either ILP32 or LP64,
     // and char is always 8-bit.
@@ -218,10 +190,6 @@ pub mod signal_macros {
 pub mod elf;
 
 // The rest of this file is auto-generated!
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "arm")]
-#[path = "arm/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "arm")]
 #[path = "arm/bootparam.rs"]
@@ -254,14 +222,6 @@ pub mod if_ether;
 #[cfg(target_arch = "arm")]
 #[path = "arm/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "arm")]
-#[path = "arm/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "arm")]
-#[path = "arm/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "arm")]
 #[path = "arm/io_uring.rs"]
@@ -302,18 +262,10 @@ pub mod ptrace;
 #[cfg(target_arch = "arm")]
 #[path = "arm/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "arm")]
-#[path = "arm/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "arm")]
 #[path = "arm/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "aarch64")]
-#[path = "aarch64/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "aarch64")]
 #[path = "aarch64/bootparam.rs"]
@@ -346,14 +298,6 @@ pub mod if_ether;
 #[cfg(target_arch = "aarch64")]
 #[path = "aarch64/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "aarch64")]
-#[path = "aarch64/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "aarch64")]
-#[path = "aarch64/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "aarch64")]
 #[path = "aarch64/io_uring.rs"]
@@ -394,18 +338,10 @@ pub mod ptrace;
 #[cfg(target_arch = "aarch64")]
 #[path = "aarch64/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "aarch64")]
-#[path = "aarch64/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "aarch64")]
 #[path = "aarch64/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "csky")]
-#[path = "csky/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "csky")]
 #[path = "csky/bootparam.rs"]
@@ -438,14 +374,6 @@ pub mod if_ether;
 #[cfg(target_arch = "csky")]
 #[path = "csky/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "csky")]
-#[path = "csky/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "csky")]
-#[path = "csky/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "csky")]
 #[path = "csky/io_uring.rs"]
@@ -486,110 +414,10 @@ pub mod ptrace;
 #[cfg(target_arch = "csky")]
 #[path = "csky/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "csky")]
-#[path = "csky/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "csky")]
 #[path = "csky/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/auxvec.rs"]
-pub mod auxvec;
-#[cfg(feature = "bootparam")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/bootparam.rs"]
-pub mod bootparam;
-#[cfg(feature = "btrfs")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/btrfs.rs"]
-pub mod btrfs;
-#[cfg(feature = "elf_uapi")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/elf_uapi.rs"]
-pub mod elf_uapi;
-#[cfg(feature = "errno")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/errno.rs"]
-pub mod errno;
-#[cfg(feature = "general")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/general.rs"]
-pub mod general;
-#[cfg(feature = "if_arp")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/if_arp.rs"]
-pub mod if_arp;
-#[cfg(feature = "if_ether")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/if_ether.rs"]
-pub mod if_ether;
-#[cfg(feature = "if_packet")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/if_packet.rs"]
-pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/image.rs"]
-pub mod image;
-#[cfg(feature = "io_uring")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/io_uring.rs"]
-pub mod io_uring;
-#[cfg(feature = "ioctl")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/ioctl.rs"]
-pub mod ioctl;
-#[cfg(feature = "landlock")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/landlock.rs"]
-pub mod landlock;
-#[cfg(feature = "loop_device")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/loop_device.rs"]
-pub mod loop_device;
-#[cfg(feature = "mempolicy")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/mempolicy.rs"]
-pub mod mempolicy;
-#[cfg(feature = "net")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/net.rs"]
-pub mod net;
-#[cfg(feature = "netlink")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/netlink.rs"]
-pub mod netlink;
-#[cfg(feature = "prctl")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/prctl.rs"]
-pub mod prctl;
-#[cfg(feature = "ptrace")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/ptrace.rs"]
-pub mod ptrace;
-#[cfg(feature = "system")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/system.rs"]
-pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/vm_sockets.rs"]
-pub mod vm_sockets;
-#[cfg(feature = "xdp")]
-#[cfg(target_arch = "hexagon")]
-#[path = "hexagon/xdp.rs"]
-pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "loongarch64")]
-#[path = "loongarch64/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "loongarch64")]
 #[path = "loongarch64/bootparam.rs"]
@@ -622,14 +450,6 @@ pub mod if_ether;
 #[cfg(target_arch = "loongarch64")]
 #[path = "loongarch64/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "loongarch64")]
-#[path = "loongarch64/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "loongarch64")]
-#[path = "loongarch64/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "loongarch64")]
 #[path = "loongarch64/io_uring.rs"]
@@ -670,110 +490,10 @@ pub mod ptrace;
 #[cfg(target_arch = "loongarch64")]
 #[path = "loongarch64/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "loongarch64")]
-#[path = "loongarch64/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "loongarch64")]
 #[path = "loongarch64/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/auxvec.rs"]
-pub mod auxvec;
-#[cfg(feature = "bootparam")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/bootparam.rs"]
-pub mod bootparam;
-#[cfg(feature = "btrfs")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/btrfs.rs"]
-pub mod btrfs;
-#[cfg(feature = "elf_uapi")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/elf_uapi.rs"]
-pub mod elf_uapi;
-#[cfg(feature = "errno")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/errno.rs"]
-pub mod errno;
-#[cfg(feature = "general")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/general.rs"]
-pub mod general;
-#[cfg(feature = "if_arp")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/if_arp.rs"]
-pub mod if_arp;
-#[cfg(feature = "if_ether")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/if_ether.rs"]
-pub mod if_ether;
-#[cfg(feature = "if_packet")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/if_packet.rs"]
-pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/image.rs"]
-pub mod image;
-#[cfg(feature = "io_uring")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/io_uring.rs"]
-pub mod io_uring;
-#[cfg(feature = "ioctl")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/ioctl.rs"]
-pub mod ioctl;
-#[cfg(feature = "landlock")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/landlock.rs"]
-pub mod landlock;
-#[cfg(feature = "loop_device")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/loop_device.rs"]
-pub mod loop_device;
-#[cfg(feature = "mempolicy")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/mempolicy.rs"]
-pub mod mempolicy;
-#[cfg(feature = "net")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/net.rs"]
-pub mod net;
-#[cfg(feature = "netlink")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/netlink.rs"]
-pub mod netlink;
-#[cfg(feature = "prctl")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/prctl.rs"]
-pub mod prctl;
-#[cfg(feature = "ptrace")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/ptrace.rs"]
-pub mod ptrace;
-#[cfg(feature = "system")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/system.rs"]
-pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/vm_sockets.rs"]
-pub mod vm_sockets;
-#[cfg(feature = "xdp")]
-#[cfg(target_arch = "m68k")]
-#[path = "m68k/xdp.rs"]
-pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "mips")]
-#[path = "mips/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "mips")]
 #[path = "mips/bootparam.rs"]
@@ -806,14 +526,6 @@ pub mod if_ether;
 #[cfg(target_arch = "mips")]
 #[path = "mips/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "mips")]
-#[path = "mips/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "mips")]
-#[path = "mips/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "mips")]
 #[path = "mips/io_uring.rs"]
@@ -854,18 +566,10 @@ pub mod ptrace;
 #[cfg(target_arch = "mips")]
 #[path = "mips/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "mips")]
-#[path = "mips/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "mips")]
 #[path = "mips/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "mips64")]
-#[path = "mips64/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "mips64")]
 #[path = "mips64/bootparam.rs"]
@@ -898,14 +602,6 @@ pub mod if_ether;
 #[cfg(target_arch = "mips64")]
 #[path = "mips64/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "mips64")]
-#[path = "mips64/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "mips64")]
-#[path = "mips64/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "mips64")]
 #[path = "mips64/io_uring.rs"]
@@ -946,18 +642,10 @@ pub mod ptrace;
 #[cfg(target_arch = "mips64")]
 #[path = "mips64/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "mips64")]
-#[path = "mips64/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "mips64")]
 #[path = "mips64/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "mips32r6")]
-#[path = "mips32r6/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "mips32r6")]
 #[path = "mips32r6/bootparam.rs"]
@@ -990,14 +678,6 @@ pub mod if_ether;
 #[cfg(target_arch = "mips32r6")]
 #[path = "mips32r6/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "mips32r6")]
-#[path = "mips32r6/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "mips32r6")]
-#[path = "mips32r6/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "mips32r6")]
 #[path = "mips32r6/io_uring.rs"]
@@ -1038,18 +718,10 @@ pub mod ptrace;
 #[cfg(target_arch = "mips32r6")]
 #[path = "mips32r6/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "mips32r6")]
-#[path = "mips32r6/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "mips32r6")]
 #[path = "mips32r6/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "mips64r6")]
-#[path = "mips64r6/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "mips64r6")]
 #[path = "mips64r6/bootparam.rs"]
@@ -1082,14 +754,6 @@ pub mod if_ether;
 #[cfg(target_arch = "mips64r6")]
 #[path = "mips64r6/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "mips64r6")]
-#[path = "mips64r6/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "mips64r6")]
-#[path = "mips64r6/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "mips64r6")]
 #[path = "mips64r6/io_uring.rs"]
@@ -1130,18 +794,10 @@ pub mod ptrace;
 #[cfg(target_arch = "mips64r6")]
 #[path = "mips64r6/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "mips64r6")]
-#[path = "mips64r6/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "mips64r6")]
 #[path = "mips64r6/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "powerpc")]
-#[path = "powerpc/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "powerpc")]
 #[path = "powerpc/bootparam.rs"]
@@ -1174,14 +830,6 @@ pub mod if_ether;
 #[cfg(target_arch = "powerpc")]
 #[path = "powerpc/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "powerpc")]
-#[path = "powerpc/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "powerpc")]
-#[path = "powerpc/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "powerpc")]
 #[path = "powerpc/io_uring.rs"]
@@ -1222,18 +870,10 @@ pub mod ptrace;
 #[cfg(target_arch = "powerpc")]
 #[path = "powerpc/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "powerpc")]
-#[path = "powerpc/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "powerpc")]
 #[path = "powerpc/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "powerpc64")]
-#[path = "powerpc64/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "powerpc64")]
 #[path = "powerpc64/bootparam.rs"]
@@ -1266,14 +906,6 @@ pub mod if_ether;
 #[cfg(target_arch = "powerpc64")]
 #[path = "powerpc64/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "powerpc64")]
-#[path = "powerpc64/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "powerpc64")]
-#[path = "powerpc64/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "powerpc64")]
 #[path = "powerpc64/io_uring.rs"]
@@ -1314,18 +946,10 @@ pub mod ptrace;
 #[cfg(target_arch = "powerpc64")]
 #[path = "powerpc64/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "powerpc64")]
-#[path = "powerpc64/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "powerpc64")]
 #[path = "powerpc64/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "riscv32")]
-#[path = "riscv32/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "riscv32")]
 #[path = "riscv32/bootparam.rs"]
@@ -1358,14 +982,6 @@ pub mod if_ether;
 #[cfg(target_arch = "riscv32")]
 #[path = "riscv32/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "riscv32")]
-#[path = "riscv32/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "riscv32")]
-#[path = "riscv32/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "riscv32")]
 #[path = "riscv32/io_uring.rs"]
@@ -1406,18 +1022,10 @@ pub mod ptrace;
 #[cfg(target_arch = "riscv32")]
 #[path = "riscv32/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "riscv32")]
-#[path = "riscv32/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "riscv32")]
 #[path = "riscv32/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "riscv64")]
-#[path = "riscv64/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "riscv64")]
 #[path = "riscv64/bootparam.rs"]
@@ -1450,14 +1058,6 @@ pub mod if_ether;
 #[cfg(target_arch = "riscv64")]
 #[path = "riscv64/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "riscv64")]
-#[path = "riscv64/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "riscv64")]
-#[path = "riscv64/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "riscv64")]
 #[path = "riscv64/io_uring.rs"]
@@ -1498,18 +1098,10 @@ pub mod ptrace;
 #[cfg(target_arch = "riscv64")]
 #[path = "riscv64/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "riscv64")]
-#[path = "riscv64/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "riscv64")]
 #[path = "riscv64/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "s390x")]
-#[path = "s390x/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "s390x")]
 #[path = "s390x/bootparam.rs"]
@@ -1542,14 +1134,6 @@ pub mod if_ether;
 #[cfg(target_arch = "s390x")]
 #[path = "s390x/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "s390x")]
-#[path = "s390x/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "s390x")]
-#[path = "s390x/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "s390x")]
 #[path = "s390x/io_uring.rs"]
@@ -1590,18 +1174,10 @@ pub mod ptrace;
 #[cfg(target_arch = "s390x")]
 #[path = "s390x/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "s390x")]
-#[path = "s390x/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "s390x")]
 #[path = "s390x/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "sparc")]
-#[path = "sparc/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "sparc")]
 #[path = "sparc/bootparam.rs"]
@@ -1634,14 +1210,6 @@ pub mod if_ether;
 #[cfg(target_arch = "sparc")]
 #[path = "sparc/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "sparc")]
-#[path = "sparc/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "sparc")]
-#[path = "sparc/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "sparc")]
 #[path = "sparc/io_uring.rs"]
@@ -1682,18 +1250,10 @@ pub mod ptrace;
 #[cfg(target_arch = "sparc")]
 #[path = "sparc/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "sparc")]
-#[path = "sparc/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "sparc")]
 #[path = "sparc/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "sparc64")]
-#[path = "sparc64/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "sparc64")]
 #[path = "sparc64/bootparam.rs"]
@@ -1726,14 +1286,6 @@ pub mod if_ether;
 #[cfg(target_arch = "sparc64")]
 #[path = "sparc64/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "sparc64")]
-#[path = "sparc64/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "sparc64")]
-#[path = "sparc64/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "sparc64")]
 #[path = "sparc64/io_uring.rs"]
@@ -1774,18 +1326,10 @@ pub mod ptrace;
 #[cfg(target_arch = "sparc64")]
 #[path = "sparc64/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "sparc64")]
-#[path = "sparc64/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "sparc64")]
 #[path = "sparc64/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(target_arch = "x86")]
-#[path = "x86/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(target_arch = "x86")]
 #[path = "x86/bootparam.rs"]
@@ -1818,14 +1362,6 @@ pub mod if_ether;
 #[cfg(target_arch = "x86")]
 #[path = "x86/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(target_arch = "x86")]
-#[path = "x86/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(target_arch = "x86")]
-#[path = "x86/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(target_arch = "x86")]
 #[path = "x86/io_uring.rs"]
@@ -1866,18 +1402,10 @@ pub mod ptrace;
 #[cfg(target_arch = "x86")]
 #[path = "x86/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(target_arch = "x86")]
-#[path = "x86/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(target_arch = "x86")]
 #[path = "x86/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
-#[path = "x86_64/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
 #[path = "x86_64/bootparam.rs"]
@@ -1910,14 +1438,6 @@ pub mod if_ether;
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
 #[path = "x86_64/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
-#[path = "x86_64/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
-#[path = "x86_64/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
 #[path = "x86_64/io_uring.rs"]
@@ -1958,18 +1478,10 @@ pub mod ptrace;
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
 #[path = "x86_64/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
-#[path = "x86_64/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
 #[path = "x86_64/xdp.rs"]
 pub mod xdp;
-#[cfg(feature = "auxvec")]
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-#[path = "x32/auxvec.rs"]
-pub mod auxvec;
 #[cfg(feature = "bootparam")]
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
 #[path = "x32/bootparam.rs"]
@@ -2002,14 +1514,6 @@ pub mod if_ether;
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
 #[path = "x32/if_packet.rs"]
 pub mod if_packet;
-#[cfg(feature = "if_tun")]
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-#[path = "x32/if_tun.rs"]
-pub mod if_tun;
-#[cfg(feature = "image")]
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-#[path = "x32/image.rs"]
-pub mod image;
 #[cfg(feature = "io_uring")]
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
 #[path = "x32/io_uring.rs"]
@@ -2050,10 +1554,6 @@ pub mod ptrace;
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
 #[path = "x32/system.rs"]
 pub mod system;
-#[cfg(feature = "vm_sockets")]
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-#[path = "x32/vm_sockets.rs"]
-pub mod vm_sockets;
 #[cfg(feature = "xdp")]
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
 #[path = "x32/xdp.rs"]

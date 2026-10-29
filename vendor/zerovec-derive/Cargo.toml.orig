@@ -5,15 +5,14 @@
 [package]
 name = "zerovec-derive"
 description = "Custom derive for the zerovec crate"
-version = "0.11.7"
+version = "0.10.4"
 authors = ["Manish Goregaokar <manishsmail@gmail.com>"]
 categories = ["rust-patterns", "memory-management", "caching", "no-std", "data-structures"]
-keywords = ["macros", "derive", "serialization", "zero-copy"]
+keywords = ["zerocopy", "serialization", "zero-copy", "serde"]
 
-edition = "2021"
+edition.workspace = true
 license.workspace = true
 repository.workspace = true
-rust-version = "1.83"
 
 [package.metadata.workspaces]
 independent = true
@@ -28,26 +27,8 @@ quote = { workspace = true }
 syn = { workspace = true, features = ["extra-traits"]}
 
 [dev-dependencies]
-zerovec = { path = "..", features = ["serde", "derive", "alloc"] }
+zerovec = { path = "..", features = ["serde", "derive"] }
 serde = { workspace = true, features = ["derive"] }
 zerofrom = { path = "../../../utils/zerofrom" }
 bincode = { workspace = true }
 serde_json = { workspace = true }
-
-[[example]]
-name = "derives"
-harness = false
-test = true
-
-[[example]]
-name = "make"
-harness = false
-test = true
-
-[[example]]
-name = "make_var"
-harness = false
-test = true
-
-[lints]
-workspace = true

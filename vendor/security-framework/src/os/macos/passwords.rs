@@ -46,7 +46,6 @@ impl AsRef<[u8]> for SecKeychainItemPassword {
 
 impl Deref for SecKeychainItemPassword {
     type Target = [u8];
-
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
         self.as_ref()
@@ -67,7 +66,7 @@ impl SecKeychainItem {
     pub fn set_password(&mut self, password: &[u8]) -> Result<()> {
         unsafe {
             cvt(SecKeychainItemModifyAttributesAndData(
-                self.as_concrete_TypeRef(),
+                self.as_CFTypeRef() as *mut _,
                 ptr::null(),
                 password.len() as u32,
                 password.as_ptr().cast(),
@@ -80,7 +79,7 @@ impl SecKeychainItem {
     #[inline]
     pub fn delete(self) {
         unsafe {
-            SecKeychainItemDelete(self.as_concrete_TypeRef());
+            SecKeychainItemDelete(self.as_CFTypeRef() as *mut _);
         }
     }
 }
@@ -90,7 +89,8 @@ impl SecKeychainItem {
 /// The underlying system supports passwords with 0 values, so this
 /// returns a vector of bytes rather than a string.
 ///
-/// * `keychains` is an array of keychains to search or None to search the default keychain.
+/// * `keychains` is an array of keychains to search or None to search
+///   the default keychain.
 /// * `service` is the name of the service to search for.
 /// * `account` is the name of the account to search for.
 pub fn find_generic_password(
@@ -100,9 +100,9 @@ pub fn find_generic_password(
 ) -> Result<(SecKeychainItemPassword, SecKeychainItem)> {
     let keychains_or_none = keychains.map(CFArray::from_CFTypes);
 
-    let keychains_or_null = match &keychains_or_none {
+    let keychains_or_null = match keychains_or_none {
         None => ptr::null(),
-        Some(keychains) => keychains.as_CFTypeRef(),
+        Some(ref keychains) => keychains.as_CFTypeRef(),
     };
 
     let mut data_len = 0;
@@ -130,7 +130,8 @@ pub fn find_generic_password(
     }
 }
 
-/// * `keychains` is an array of keychains to search or None to search the default keychain.
+/// * `keychains` is an array of keychains to search or None to search
+///   the default keychain.
 /// * `server`: server name.
 /// * `security_domain`: security domain. This parameter is optional.
 /// * `account`: account name.
@@ -151,9 +152,9 @@ pub fn find_internet_password(
 ) -> Result<(SecKeychainItemPassword, SecKeychainItem)> {
     let keychains_or_none = keychains.map(CFArray::from_CFTypes);
 
-    let keychains_or_null = match &keychains_or_none {
+    let keychains_or_null = match keychains_or_none {
         None => ptr::null(),
-        Some(keychains) => keychains.as_CFTypeRef(),
+        Some(ref keychains) => keychains.as_CFTypeRef(),
     };
 
     let mut data_len = 0;
@@ -166,7 +167,8 @@ pub fn find_internet_password(
             server.len() as u32,
             server.as_ptr().cast(),
             security_domain.map_or(0, |s| s.len() as u32),
-            security_domain.map_or(ptr::null(), |s| s.as_ptr().cast()),
+            security_domain
+                .map_or(ptr::null(), |s| s.as_ptr().cast()),
             account.len() as u32,
             account.as_ptr().cast(),
             path.len() as u32,
@@ -196,7 +198,7 @@ impl SecKeychain {
         service: &str,
         account: &str,
     ) -> Result<(SecKeychainItemPassword, SecKeychainItem)> {
-        find_generic_password(Some(std::slice::from_ref(self)), service, account)
+        find_generic_password(Some(&[self.clone()]), service, account)
     }
 
     /// Find internet password in this keychain
@@ -213,7 +215,7 @@ impl SecKeychain {
         authentication_type: SecAuthenticationType,
     ) -> Result<(SecKeychainItemPassword, SecKeychainItem)> {
         find_internet_password(
-            Some(std::slice::from_ref(self)),
+            Some(&[self.clone()]),
             server,
             security_domain,
             account,
@@ -262,7 +264,8 @@ impl SecKeychain {
 
     /// Set a generic password.
     ///
-    /// * `keychain_opt` is the keychain to use or None to use the default keychain.
+    /// * `keychain_opt` is the keychain to use or None to use the default
+    ///   keychain.
     /// * `service` is the associated service name for the password.
     /// * `account` is the associated account name for the password.
     /// * `password` is the password itself.
@@ -325,7 +328,8 @@ impl SecKeychain {
                 server.len() as u32,
                 server.as_ptr().cast(),
                 security_domain.map_or(0, |s| s.len() as u32),
-                security_domain.map_or(ptr::null(), |s| s.as_ptr().cast()),
+                security_domain
+                    .map_or(ptr::null(), |s| s.as_ptr().cast()),
                 account.len() as u32,
                 account.as_ptr().cast(),
                 path.len() as u32,
@@ -346,7 +350,8 @@ impl SecKeychain {
 mod test {
     use super::*;
     use crate::os::macos::keychain::CreateOptions;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::tempdir;
+    use tempfile::TempDir;
 
     fn temp_keychain_setup(name: &str) -> (TempDir, SecKeychain) {
         let dir = tempdir().expect("TempDir::new");
@@ -377,7 +382,8 @@ mod test {
     }
 
     #[test]
-    fn default_keychain_test_missing_password_default() {
+    #[cfg(feature = "default_keychain_tests")]
+    fn missing_password_default() {
         let service = "default_this_service_does_not_exist";
         let account = "this_account_is_bogus";
         let found = find_generic_password(None, service, account);
@@ -393,8 +399,12 @@ mod test {
         let account = "temp_this_is_the_test_account";
         let password = String::from("deadbeef").into_bytes();
 
-        keychain.set_generic_password(service, account, &password).expect("set_generic_password");
-        let (found, item) = keychain.find_generic_password(service, account).expect("find_generic_password");
+        keychain
+            .set_generic_password(service, account, &password)
+            .expect("set_generic_password");
+        let (found, item) = keychain
+            .find_generic_password(service, account)
+            .expect("find_generic_password");
         assert_eq!(found.to_owned(), password);
 
         item.delete();
@@ -403,7 +413,8 @@ mod test {
     }
 
     #[test]
-    fn default_keychain_test_round_trip_password_default() {
+    #[cfg(feature = "default_keychain_tests")]
+    fn round_trip_password_default() {
         let service = "test_round_trip_password_default";
         let account = "this_is_the_test_account";
         let password = String::from("deadbeef").into_bytes();
@@ -412,7 +423,8 @@ mod test {
             .expect("default keychain")
             .set_generic_password(service, account, &password)
             .expect("set_generic_password");
-        let (found, item) = find_generic_password(None, service, account).expect("find_generic_password");
+        let (found, item) =
+            find_generic_password(None, service, account).expect("find_generic_password");
         assert_eq!(&*found, &password[..]);
 
         item.delete();
@@ -448,7 +460,8 @@ mod test {
     }
 
     #[test]
-    fn default_keychain_test_change_password_default() {
+    #[cfg(feature = "default_keychain_tests")]
+    fn change_password_default() {
         let service = "test_change_password_default";
         let account = "this_is_the_test_account";
         let pw1 = String::from("password1").into_bytes();
@@ -458,14 +471,16 @@ mod test {
             .expect("default keychain")
             .set_generic_password(service, account, &pw1)
             .expect("set_generic_password1");
-        let (found, _) = find_generic_password(None, service, account).expect("find_generic_password1");
+        let (found, _) =
+            find_generic_password(None, service, account).expect("find_generic_password1");
         assert_eq!(found.to_owned(), pw1);
 
         SecKeychain::default()
             .expect("default keychain")
             .set_generic_password(service, account, &pw2)
             .expect("set_generic_password2");
-        let (found, item) = find_generic_password(None, service, account).expect("find_generic_password2");
+        let (found, item) =
+            find_generic_password(None, service, account).expect("find_generic_password2");
         assert_eq!(found.to_owned(), pw2);
 
         item.delete();

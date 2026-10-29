@@ -7,6 +7,8 @@
 use displaydoc::Display;
 
 /// A custom error type for [`CodePointTrie`](super::CodePointTrie).
+///
+/// Re-exported as [Error][super::Error].
 #[derive(Copy, Clone, Display, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Error {
@@ -19,19 +21,4 @@ pub enum Error {
     /// [`CodePointTrie`](super::CodePointTrie) must be constructed from data vector with at least one element
     #[displaydoc("CodePointTrie must be constructed from data vector with at least one element")]
     EmptyDataVector,
-    /// [`CodePointTrie`](super::CodePointTrie) must be constructed from index vector long enough to accommodate fast-path access
-    #[displaydoc(
-        "CodePointTrie must be constructed from index vector long enough to accommodate fast-path access"
-    )]
-    IndexTooShortForFastAccess,
-    /// [`CodePointTrie`](super::CodePointTrie) must be constructed from data vector long enough to accommodate fast-path access
-    #[displaydoc(
-        "CodePointTrie must be constructed from data vector long enough to accommodate fast-path access"
-    )]
-    DataTooShortForFastAccess,
-    /// The null value is not a valid `T`
-    #[displaydoc("The null value is not a valid `T`")]
-    InvalidNullValue,
 }
-
-impl core::error::Error for Error {}

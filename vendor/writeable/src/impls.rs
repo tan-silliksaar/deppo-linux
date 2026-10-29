@@ -6,16 +6,14 @@ use crate::*;
 use core::fmt;
 
 macro_rules! impl_write_num {
-    // random_call exists since usize doesn't have a rand impl. Should always be `random` or empty
-    ($u:ty, $i:ty, $test:ident $(,$random_call:ident)?) => {
+    ($u:ty, $i:ty, $test:ident) => {
         impl $crate::Writeable for $u {
             fn write_to<W: core::fmt::Write + ?Sized>(&self, sink: &mut W) -> core::fmt::Result {
                 const MAX_LEN: usize = <$u>::MAX.ilog10() as usize + 1;
                 let mut buf = [b'0'; MAX_LEN];
                 let mut n = *self;
                 let mut i = MAX_LEN;
-                #[expect(clippy::indexing_slicing)] // n < 10^i
-                #[allow(trivial_numeric_casts)]
+                #[allow(clippy::indexing_slicing)] // n < 10^i
                 while n != 0 {
                     i -= 1;
                     buf[i] = b'0' + (n % 10) as u8;
@@ -25,7 +23,7 @@ macro_rules! impl_write_num {
                     debug_assert_eq!(*self, 0);
                     i -= 1;
                 }
-                #[expect(clippy::indexing_slicing)] // buf is ASCII
+                #[allow(clippy::indexing_slicing)] // buf is ASCII
                 let s = unsafe { core::str::from_utf8_unchecked(&buf[i..]) };
                 sink.write_str(s)
             }
@@ -50,7 +48,6 @@ macro_rules! impl_write_num {
         }
 
         #[test]
-        #[allow(trivial_numeric_casts)]
         fn $test() {
             use $crate::assert_writeable_eq;
             assert_writeable_eq!(&(0 as $u), "0");
@@ -74,25 +71,22 @@ macro_rules! impl_write_num {
             assert_writeable_eq!(&<$i>::MAX, <$i>::MAX.to_string());
             assert_writeable_eq!(&<$i>::MIN, <$i>::MIN.to_string());
 
-            $(
-
-                use rand::{rngs::SmallRng, Rng, SeedableRng};
-                let mut rng = SmallRng::seed_from_u64(4); // chosen by fair dice roll.
-                                                          // guaranteed to be random.
-                for _ in 0..1000 {
-                    let rand = rng.$random_call::<$u>();
-                    assert_writeable_eq!(rand, rand.to_string());
-                }
-            )?
+            use rand::{rngs::SmallRng, Rng, SeedableRng};
+            let mut rng = SmallRng::seed_from_u64(4); // chosen by fair dice roll.
+                                                      // guaranteed to be random.
+            for _ in 0..1000 {
+                let rand = rng.gen::<$u>();
+                assert_writeable_eq!(rand, rand.to_string());
+            }
         }
     };
 }
 
-impl_write_num!(u8, i8, test_u8, random);
-impl_write_num!(u16, i16, test_u16, random);
-impl_write_num!(u32, i32, test_u32, random);
-impl_write_num!(u64, i64, test_u64, random);
-impl_write_num!(u128, i128, test_u128, random);
+impl_write_num!(u8, i8, test_u8);
+impl_write_num!(u16, i16, test_u16);
+impl_write_num!(u32, i32, test_u32);
+impl_write_num!(u64, i64, test_u64);
+impl_write_num!(u128, i128, test_u128);
 impl_write_num!(usize, isize, test_usize);
 
 impl Writeable for str {
@@ -106,14 +100,49 @@ impl Writeable for str {
         LengthHint::exact(self.len())
     }
 
+    /// Returns a borrowed `str`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use writeable::Writeable;
+    ///
+    /// let cow = "foo".write_to_string();
+    /// assert!(matches!(cow, Cow::Borrowed(_)));
+    /// ```
     #[inline]
-    fn writeable_borrow(&self) -> Option<&str> {
-        Some(self)
+    fn write_to_string(&self) -> Cow<str> {
+        Cow::Borrowed(self)
+    }
+
+    #[inline]
+    fn writeable_cmp_bytes(&self, other: &[u8]) -> core::cmp::Ordering {
+        self.as_bytes().cmp(other)
     }
 }
 
-#[cfg(feature = "alloc")]
-crate::impl_writeable_delegate!(String, |&self| self.as_str());
+impl Writeable for String {
+    #[inline]
+    fn write_to<W: fmt::Write + ?Sized>(&self, sink: &mut W) -> fmt::Result {
+        sink.write_str(self)
+    }
+
+    #[inline]
+    fn writeable_length_hint(&self) -> LengthHint {
+        LengthHint::exact(self.len())
+    }
+
+    #[inline]
+    fn write_to_string(&self) -> Cow<str> {
+        Cow::Borrowed(self)
+    }
+
+    #[inline]
+    fn writeable_cmp_bytes(&self, other: &[u8]) -> core::cmp::Ordering {
+        self.as_bytes().cmp(other)
+    }
+}
 
 impl Writeable for char {
     #[inline]
@@ -127,21 +156,48 @@ impl Writeable for char {
     }
 
     #[inline]
-    #[cfg(feature = "alloc")]
-    fn write_to_string(&self) -> Cow<'_, str> {
+    fn write_to_string(&self) -> Cow<str> {
         let mut s = String::with_capacity(self.len_utf8());
         s.push(*self);
         Cow::Owned(s)
     }
+
+    #[inline]
+    fn writeable_cmp_bytes(&self, other: &[u8]) -> core::cmp::Ordering {
+        self.encode_utf8(&mut [0u8; 4]).as_bytes().cmp(other)
+    }
 }
 
-crate::impl_writeable_delegate!(&T, |&self| *self, #[cfg(feature = "alloc")] fn write_to_string, where T: Writeable + ?Sized);
+impl<T: Writeable + ?Sized> Writeable for &T {
+    #[inline]
+    fn write_to<W: fmt::Write + ?Sized>(&self, sink: &mut W) -> fmt::Result {
+        (*self).write_to(sink)
+    }
 
-#[cfg(feature = "alloc")]
+    #[inline]
+    fn write_to_parts<W: PartsWrite + ?Sized>(&self, sink: &mut W) -> fmt::Result {
+        (*self).write_to_parts(sink)
+    }
+
+    #[inline]
+    fn writeable_length_hint(&self) -> LengthHint {
+        (*self).writeable_length_hint()
+    }
+
+    #[inline]
+    fn write_to_string(&self) -> Cow<str> {
+        (*self).write_to_string()
+    }
+
+    #[inline]
+    fn writeable_cmp_bytes(&self, other: &[u8]) -> core::cmp::Ordering {
+        (*self).writeable_cmp_bytes(other)
+    }
+}
+
 macro_rules! impl_write_smart_pointer {
     ($ty:path, T: $extra_bound:path) => {
-        #[allow(unused_qualifications)]
-        impl<T: ?Sized + Writeable + $extra_bound> Writeable for $ty {
+        impl<'a, T: ?Sized + Writeable + $extra_bound> Writeable for $ty {
             #[inline]
             fn write_to<W: fmt::Write + ?Sized>(&self, sink: &mut W) -> fmt::Result {
                 core::borrow::Borrow::<T>::borrow(self).write_to(sink)
@@ -155,12 +211,12 @@ macro_rules! impl_write_smart_pointer {
                 core::borrow::Borrow::<T>::borrow(self).writeable_length_hint()
             }
             #[inline]
-            fn writeable_borrow(&self) -> Option<&str> {
-                core::borrow::Borrow::<T>::borrow(self).writeable_borrow()
+            fn write_to_string(&self) -> Cow<str> {
+                core::borrow::Borrow::<T>::borrow(self).write_to_string()
             }
             #[inline]
-            fn write_to_string(&self) -> Cow<'_, str> {
-                core::borrow::Borrow::<T>::borrow(self).write_to_string()
+            fn writeable_cmp_bytes(&self, other: &[u8]) -> core::cmp::Ordering {
+                core::borrow::Borrow::<T>::borrow(self).writeable_cmp_bytes(other)
             }
         }
     };
@@ -170,13 +226,9 @@ macro_rules! impl_write_smart_pointer {
     };
 }
 
-#[cfg(feature = "alloc")]
-impl_write_smart_pointer!(Cow<'_, T>, T: alloc::borrow::ToOwned);
-#[cfg(feature = "alloc")]
+impl_write_smart_pointer!(Cow<'a, T>, T: alloc::borrow::ToOwned);
 impl_write_smart_pointer!(alloc::boxed::Box<T>);
-#[cfg(feature = "alloc")]
 impl_write_smart_pointer!(alloc::rc::Rc<T>);
-#[cfg(feature = "alloc")]
 impl_write_smart_pointer!(alloc::sync::Arc<T>);
 
 #[test]
@@ -203,7 +255,7 @@ fn test_string_impls() {
         assert_writeable_eq!(&chars[i], s);
         for j in 0..chars.len() {
             assert_eq!(
-                cmp_str(&chars[j], &s),
+                chars[j].writeable_cmp_bytes(s.as_bytes()),
                 chars[j].cmp(&chars[i]),
                 "{:?} vs {:?}",
                 chars[j],

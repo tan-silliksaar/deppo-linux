@@ -1,19 +1,20 @@
 # openssl-probe
 
-A library for helping to find system-wide trust anchor ("root") certificate
-locations based on paths typically used by `openssl`.
-
-For most users, [`rustls-platform-verifier`][] or [`rustls-native-certs`][]
-are more convenient and robust ways to have TLS connections respect system
-configuration. This is a lower-level library.
+Tool for helping to find SSL certificate locations on the system for OpenSSL
 
 [![Crates.io](https://img.shields.io/crates/v/openssl-probe.svg?maxAge=2592000)](https://crates.io/crates/openssl-probe)
 [![docs.rs](https://docs.rs/openssl-probe/badge.svg)](https://docs.rs/openssl-probe/)
 
-[`rustls-platform-verifier`]: https://crates.io/crates/rustls-platform-verifier
-[`rustls-native-certs`]: https://crates.io/crates/rustls-native-certs
-
 ## Usage
+
+First, add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+openssl-probe = "0.1.6"
+```
+
+Then add this to your crate:
 
 ```rust
 fn main() {

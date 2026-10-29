@@ -11,9 +11,9 @@
 
 [package]
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.71.1"
 name = "yoke"
-version = "0.8.4"
+version = "0.7.5"
 authors = ["Manish Goregaokar <manishsmail@gmail.com>"]
 build = false
 include = [
@@ -25,9 +25,7 @@ include = [
     "Cargo.toml",
     "LICENSE",
     "README.md",
-    "build.rs",
 ]
-autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -35,9 +33,10 @@ autobenches = false
 description = "Abstraction allowing borrowed data to be carried along with the backing data it borrows from"
 readme = "README.md"
 keywords = [
-    "zero-copy",
+    "zerocopy",
     "serialization",
-    "memory-efficiency",
+    "lifetime",
+    "borrow",
     "self-referential",
 ]
 categories = [
@@ -49,30 +48,14 @@ categories = [
 license = "Unicode-3.0"
 repository = "https://github.com/unicode-org/icu4x"
 
-[package.metadata.workspaces]
-independent = true
+[package.metadata.cargo-all-features]
+max_combination_size = 3
 
 [package.metadata.docs.rs]
 all-features = true
 
-[package.metadata.cargo-all-features]
-max_combination_size = 3
-
-[features]
-alloc = [
-    "stable_deref_trait/alloc",
-    "zerofrom/alloc",
-]
-default = [
-    "alloc",
-    "zerofrom",
-]
-derive = [
-    "dep:yoke-derive",
-    "zerofrom/derive",
-]
-serde = []
-zerofrom = ["dep:zerofrom"]
+[package.metadata.workspaces]
+independent = true
 
 [lib]
 name = "yoke"
@@ -86,17 +69,22 @@ path = "tests/bincode.rs"
 name = "miri"
 path = "tests/miri.rs"
 
+[dependencies.serde]
+version = "1.0.110"
+optional = true
+default-features = false
+
 [dependencies.stable_deref_trait]
 version = "1.2.0"
 default-features = false
 
 [dependencies.yoke-derive]
-version = "0.8.4"
+version = "0.7.5"
 optional = true
 default-features = false
 
 [dependencies.zerofrom]
-version = "0.1.6"
+version = "0.1.3"
 optional = true
 default-features = false
 
@@ -104,60 +92,26 @@ default-features = false
 version = "1.3.1"
 
 [dev-dependencies.postcard]
-version = "1.0.3"
+version = "1.0.1"
 default-features = false
 
 [dev-dependencies.serde]
-version = "1.0.220"
+version = "1.0.110"
 default-features = false
 
-[lints.clippy]
-alloc_instead_of_core = "warn"
-bool_assert_comparison = "allow"
-branches_sharing_code = "warn"
-collection_is_never_read = "warn"
-crosspointer_transmute = "warn"
-dbg_macro = "warn"
-debug_assert_with_mut_call = "warn"
-doc_markdown = "warn"
-exhaustive_enums = "deny"
-exhaustive_structs = "deny"
-fn_to_numeric_cast_any = "warn"
-infinite_loop = "warn"
-large_stack_arrays = "warn"
-mismatching_type_param_order = "warn"
-missing_fields_in_debug = "warn"
-missing_transmute_annotations = "warn"
-negative_feature_names = "warn"
-or_fun_call = "warn"
-same_functions_in_if_condition = "warn"
-todo = "warn"
-transmute_bytes_to_str = "warn"
-transmute_int_to_bool = "warn"
-transmute_int_to_non_zero = "warn"
-transmute_ptr_to_ptr = "warn"
-transmute_ptr_to_ref = "warn"
-transmute_undefined_repr = "warn"
-transmutes_expressible_as_ptr_casts = "warn"
-trivially_copy_pass_by_ref = "deny"
-unnecessary_wraps = "warn"
-useless_transmute = "warn"
-wildcard_dependencies = "warn"
-
-[lints.rust]
-missing_debug_implementations = "deny"
-trivial_numeric_casts = "deny"
-unused_lifetimes = "warn"
-unused_macro_rules = "warn"
-unused_qualifications = "warn"
-
-[lints.rust.unexpected_cfgs]
-level = "warn"
-priority = 0
-check-cfg = [
-    "cfg(icu4c_enable_renaming)",
-    "cfg(needs_alloc_error_handler)",
-    "cfg(icu4x_nightly_tests)",
-    "cfg(icu4x_run_size_tests)",
-    "cfg(icu4x_unstable_fast_trie_only)",
+[features]
+alloc = [
+    "stable_deref_trait/alloc",
+    "serde?/alloc",
+    "zerofrom/alloc",
 ]
+default = [
+    "alloc",
+    "zerofrom",
+]
+derive = [
+    "dep:yoke-derive",
+    "zerofrom/derive",
+]
+serde = ["dep:serde"]
+zerofrom = ["dep:zerofrom"]

@@ -1,39 +1,71 @@
-use security_framework::base;
-use security_framework::certificate::SecCertificate;
-use security_framework::identity::SecIdentity;
-use security_framework::import_export::{ImportedIdentity, Pkcs12ImportOptions};
-#[cfg(target_os = "macos")]
-use security_framework::random::SecRandom;
-use security_framework::secure_transport::{
+extern crate libc;
+extern crate security_framework;
+extern crate security_framework_sys;
+
+use self::security_framework::base;
+use self::security_framework::certificate::SecCertificate;
+use self::security_framework::identity::SecIdentity;
+use self::security_framework::import_export::{ImportedIdentity, Pkcs12ImportOptions};
+use self::security_framework::random::SecRandom;
+use self::security_framework::secure_transport::{
     self, ClientBuilder, SslConnectionType, SslContext, SslProtocol, SslProtocolSide,
 };
-#[cfg(target_os = "macos")]
-use security_framework_sys::base::errSecIO;
-#[cfg(any(feature = "alpn", target_os = "macos"))]
-use security_framework_sys::base::errSecParam;
-#[cfg(target_os = "macos")]
-use std::sync::{Mutex, Once};
-use std::{error, fmt, io, str};
+use self::security_framework_sys::base::{errSecIO, errSecParam};
+use std::error;
+use std::fmt;
+use std::io;
+use std::str;
+use std::sync::Mutex;
+use std::sync::Once;
 
-#[cfg(target_os = "macos")]
-use security_framework::os::macos::certificate::{PropertyType, SecCertificateExt};
-#[cfg(target_os = "macos")]
-use security_framework::os::macos::certificate_oids::CertificateOid;
-#[cfg(target_os = "macos")]
-use security_framework::os::macos::identity::SecIdentityExt;
-#[cfg(target_os = "macos")]
-use security_framework::os::macos::import_export::{
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "watchos",
+    target_os = "tvos",
+    target_os = "visionos"
+)))]
+use self::security_framework::os::macos::certificate::{PropertyType, SecCertificateExt};
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "watchos",
+    target_os = "tvos",
+    target_os = "visionos"
+)))]
+use self::security_framework::os::macos::certificate_oids::CertificateOid;
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "watchos",
+    target_os = "tvos",
+    target_os = "visionos"
+)))]
+use self::security_framework::os::macos::identity::SecIdentityExt;
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "watchos",
+    target_os = "tvos",
+    target_os = "visionos"
+)))]
+use self::security_framework::os::macos::import_export::{
     ImportOptions, Pkcs12ImportOptionsExt, SecItems,
 };
-#[cfg(target_os = "macos")]
-use security_framework::os::macos::keychain::{self, KeychainSettings, SecKeychain};
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "watchos",
+    target_os = "tvos",
+    target_os = "visionos"
+)))]
+use self::security_framework::os::macos::keychain::{self, KeychainSettings, SecKeychain};
 
-use crate::{Protocol, TlsAcceptorBuilder, TlsConnectorBuilder};
+use {Protocol, TlsAcceptorBuilder, TlsConnectorBuilder};
 
-#[cfg(target_os = "macos")]
 static SET_AT_EXIT: Once = Once::new();
 
-#[cfg(target_os = "macos")]
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "watchos",
+    target_os = "tvos",
+    target_os = "visionos"
+)))]
 static TEMP_KEYCHAIN: Mutex<Option<(SecKeychain, tempfile::TempDir)>> = Mutex::new(None);
 
 fn convert_protocol(protocol: Protocol) -> SslProtocol {
@@ -42,7 +74,6 @@ fn convert_protocol(protocol: Protocol) -> SslProtocol {
         Protocol::Tlsv10 => SslProtocol::TLS1,
         Protocol::Tlsv11 => SslProtocol::TLS11,
         Protocol::Tlsv12 => SslProtocol::TLS12,
-        Protocol::Tlsv13 => SslProtocol::TLS13,
     }
 }
 
@@ -79,12 +110,22 @@ pub struct Identity {
 }
 
 impl Identity {
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "watchos",
+        target_os = "tvos",
+        target_os = "visionos"
+    ))]
     pub fn from_pkcs8(_: &[u8], _: &[u8]) -> Result<Identity, Error> {
         panic!("Not implemented on iOS");
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "watchos",
+        target_os = "tvos",
+        target_os = "visionos"
+    )))]
     pub fn from_pkcs8(pem: &[u8], key: &[u8]) -> Result<Identity, Error> {
         if !key.starts_with(b"-----BEGIN PRIVATE KEY-----") {
             return Err(Error(base::Error::from(errSecParam)));
@@ -111,7 +152,7 @@ impl Identity {
 
         let cert = items
             .certificates
-            .first()
+            .get(0)
             .ok_or_else(|| Error(base::Error::from(errSecParam)))?;
         let ident = SecIdentity::with_certificate(&[keychain], cert)?;
         Ok(Identity {
@@ -142,7 +183,12 @@ impl Identity {
         })
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "watchos",
+        target_os = "tvos",
+        target_os = "visionos"
+    )))]
     fn import_options(buf: &[u8], pass: &str) -> Result<Vec<ImportedIdentity>, Error> {
         SET_AT_EXIT.call_once(|| {
             extern "C" fn atexit() {
@@ -153,12 +199,9 @@ impl Identity {
             }
         });
 
-        // keep it locked during import()
-        let keychain = &mut *TEMP_KEYCHAIN.lock().unwrap();
-
-        let keychain = match keychain {
-            Some((keychain, _)) => keychain.clone(),
-            lock @ None => {
+        let keychain = match *TEMP_KEYCHAIN.lock().unwrap() {
+            Some((ref keychain, _)) => keychain.clone(),
+            ref mut lock @ None => {
                 let dir =
                     tempfile::TempDir::new().map_err(|_| Error(base::Error::from(errSecIO)))?;
 
@@ -178,14 +221,18 @@ impl Identity {
         Ok(imports)
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "watchos",
+        target_os = "tvos",
+        target_os = "visionos"
+    ))]
     fn import_options(buf: &[u8], pass: &str) -> Result<Vec<ImportedIdentity>, Error> {
         let imports = Pkcs12ImportOptions::new().passphrase(pass).import(buf)?;
         Ok(imports)
     }
 }
 
-#[cfg(target_os = "macos")]
 fn random_password() -> Result<String, Error> {
     use std::fmt::Write;
     let mut bytes = [0_u8; 10];
@@ -194,7 +241,7 @@ fn random_password() -> Result<String, Error> {
         .map_err(|_| Error(base::Error::from(errSecIO)))?;
     let mut s = String::with_capacity(2 * bytes.len());
     for byte in bytes {
-        write!(s, "{byte:02X}").map_err(|_| Error(base::Error::from(errSecIO)))?;
+        write!(s, "{:02X}", byte).map_err(|_| Error(base::Error::from(errSecIO)))?;
     }
     Ok(s)
 }
@@ -208,7 +255,12 @@ impl Certificate {
         Ok(Certificate(cert))
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "watchos",
+        target_os = "tvos",
+        target_os = "visionos"
+    )))]
     pub fn from_pem(buf: &[u8]) -> Result<Certificate, Error> {
         let mut items = SecItems::default();
         ImportOptions::new().items(&mut items).import(buf)?;
@@ -219,28 +271,16 @@ impl Certificate {
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "watchos",
+        target_os = "tvos",
+        target_os = "visionos"
+    ))]
     pub fn from_pem(_: &[u8]) -> Result<Certificate, Error> {
         panic!("Not implemented on iOS, tvOS, watchOS or visionOS");
     }
 
-    #[cfg(target_os = "macos")]
-    pub fn stack_from_pem(buf: &[u8]) -> Result<Vec<Certificate>, Error> {
-        let mut items = SecItems::default();
-        ImportOptions::new().items(&mut items).import(buf)?;
-        if items.identities.is_empty() && items.keys.is_empty() {
-            Ok(items.certificates.into_iter().map(Certificate).collect())
-        } else {
-            Err(Error(base::Error::from(errSecParam)))
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    pub fn stack_from_pem(_buf: &[u8]) -> Result<Vec<Certificate>, Error> {
-        panic!("Not implemented on iOS");
-    }
-
-    #[allow(clippy::unnecessary_wraps)]
     pub fn to_der(&self) -> Result<Vec<u8>, Error> {
         Ok(self.0.to_der())
     }
@@ -328,7 +368,6 @@ where
 }
 
 #[derive(Clone, Debug)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct TlsConnector {
     identity: Option<Identity>,
     min_protocol: Option<Protocol>,
@@ -339,13 +378,12 @@ pub struct TlsConnector {
     danger_accept_invalid_certs: bool,
     disable_built_in_roots: bool,
     #[cfg(feature = "alpn")]
-    alpn: Vec<Box<str>>,
+    alpn: Vec<String>,
 }
 
 impl TlsConnector {
-    #[allow(clippy::unnecessary_wraps)]
-    pub fn new(builder: &TlsConnectorBuilder) -> Result<Self, Error> {
-        Ok(Self {
+    pub fn new(builder: &TlsConnectorBuilder) -> Result<TlsConnector, Error> {
+        Ok(TlsConnector {
             identity: builder.identity.as_ref().map(|i| i.0.clone()),
             min_protocol: builder.min_protocol,
             max_protocol: builder.max_protocol,
@@ -368,18 +406,11 @@ impl TlsConnector {
         S: io::Read + io::Write,
     {
         let mut builder = ClientBuilder::new();
-        let min = self.min_protocol.map(convert_protocol);
-        let max = self.max_protocol.map(convert_protocol);
-        if let Some(min) = min {
-            // If the unsupported TLS 1.3 is the minimum, then let it fail
-            builder.protocol_min(min);
+        if let Some(min) = self.min_protocol {
+            builder.protocol_min(convert_protocol(min));
         }
-        if let Some(max) = max {
-            builder.protocol_max(match max {
-                // If TLS 1.3 is allowed but not required, then use the latest that is actually supported - 1.2
-                SslProtocol::TLS13 if min != Some(SslProtocol::TLS13) => SslProtocol::TLS12,
-                other => other,
-            });
+        if let Some(max) = self.max_protocol {
+            builder.protocol_max(convert_protocol(max));
         }
         if let Some(identity) = self.identity.as_ref() {
             builder.identity(&identity.identity, &identity.chain);
@@ -393,7 +424,7 @@ impl TlsConnector {
         #[cfg(feature = "alpn")]
         {
             if !self.alpn.is_empty() {
-                builder.alpn_protocols(&self.alpn.iter().map(|s| &**s).collect::<Vec<_>>());
+                builder.alpn_protocols(&self.alpn.iter().map(String::as_str).collect::<Vec<_>>());
             }
         }
 
@@ -412,9 +443,8 @@ pub struct TlsAcceptor {
 }
 
 impl TlsAcceptor {
-    #[allow(clippy::unnecessary_wraps)]
-    pub fn new(builder: &TlsAcceptorBuilder) -> Result<Self, Error> {
-        Ok(Self {
+    pub fn new(builder: &TlsAcceptorBuilder) -> Result<TlsAcceptor, Error> {
+        Ok(TlsAcceptor {
             identity: builder.identity.0.clone(),
             min_protocol: builder.min_protocol,
             max_protocol: builder.max_protocol,
@@ -449,7 +479,6 @@ impl TlsAcceptor {
 
 pub struct TlsStream<S> {
     stream: secure_transport::SslStream<S>,
-    #[cfg_attr(not(target_os = "macos"), allow(unused))]
     cert: Option<SecCertificate>,
 }
 
@@ -476,8 +505,9 @@ impl<S: io::Read + io::Write> TlsStream<S> {
 
     #[allow(deprecated)]
     pub fn peer_certificate(&self) -> Result<Option<Certificate>, Error> {
-        let Some(trust) = self.stream.context().peer_trust2()? else {
-            return Ok(None);
+        let trust = match self.stream.context().peer_trust2()? {
+            Some(trust) => trust,
+            None => return Ok(None),
         };
         trust.evaluate()?;
 
@@ -505,12 +535,22 @@ impl<S: io::Read + io::Write> TlsStream<S> {
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "watchos",
+        target_os = "tvos",
+        target_os = "visionos"
+    ))]
     pub fn tls_server_end_point(&self) -> Result<Option<Vec<u8>>, Error> {
         Ok(None)
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "watchos",
+        target_os = "tvos",
+        target_os = "visionos"
+    )))]
     pub fn tls_server_end_point(&self) -> Result<Option<Vec<u8>>, Error> {
         let cert = match self.cert {
             Some(ref cert) => cert.clone(),
@@ -520,24 +560,28 @@ impl<S: io::Read + io::Write> TlsStream<S> {
             },
         };
 
-        let Some(property) = cert
+        let property = match cert
             .properties(Some(&[CertificateOid::x509_v1_signature_algorithm()]))
             .ok()
             .and_then(|p| p.get(CertificateOid::x509_v1_signature_algorithm()))
-        else {
-            return Ok(None);
+        {
+            Some(property) => property,
+            None => return Ok(None),
         };
 
-        let PropertyType::Section(section) = property.get() else {
-            return Ok(None);
+        let section = match property.get() {
+            PropertyType::Section(section) => section,
+            _ => return Ok(None),
         };
 
-        let Some(algorithm) = section.iter().find(|p| p.label() == "Algorithm") else {
-            return Ok(None);
+        let algorithm = match section.iter().find(|p| p.label() == "Algorithm") {
+            Some(property) => property,
+            None => return Ok(None),
         };
 
-        let PropertyType::String(algorithm) = algorithm.get() else {
-            return Ok(None);
+        let algorithm = match algorithm.get() {
+            PropertyType::String(algorithm) => algorithm,
+            _ => return Ok(None),
         };
 
         let digest = match &*algorithm.to_string() {
@@ -597,7 +641,6 @@ impl<S: io::Read + io::Write> io::Write for TlsStream<S> {
     }
 }
 
-#[cfg(target_os = "macos")]
 enum Digest {
     Sha224,
     Sha256,
@@ -605,34 +648,29 @@ enum Digest {
     Sha512,
 }
 
-#[cfg(target_os = "macos")]
 impl Digest {
     fn hash(&self, data: &[u8]) -> Vec<u8> {
-        const CC_SHA224_DIGEST_LENGTH: usize = 28;
-        const CC_SHA256_DIGEST_LENGTH: usize = 32;
-        const CC_SHA384_DIGEST_LENGTH: usize = 48;
-        const CC_SHA512_DIGEST_LENGTH: usize = 64;
         unsafe {
-            assert!(data.len() <= u32::MAX as usize);
+            assert!(data.len() <= CC_LONG::max_value() as usize);
             match *self {
                 Digest::Sha224 => {
                     let mut buf = [0; CC_SHA224_DIGEST_LENGTH];
-                    CC_SHA224(data.as_ptr(), data.len() as u32, buf.as_mut_ptr());
+                    CC_SHA224(data.as_ptr(), data.len() as CC_LONG, buf.as_mut_ptr());
                     buf.to_vec()
                 }
                 Digest::Sha256 => {
                     let mut buf = [0; CC_SHA256_DIGEST_LENGTH];
-                    CC_SHA256(data.as_ptr(), data.len() as u32, buf.as_mut_ptr());
+                    CC_SHA256(data.as_ptr(), data.len() as CC_LONG, buf.as_mut_ptr());
                     buf.to_vec()
                 }
                 Digest::Sha384 => {
                     let mut buf = [0; CC_SHA384_DIGEST_LENGTH];
-                    CC_SHA384(data.as_ptr(), data.len() as u32, buf.as_mut_ptr());
+                    CC_SHA384(data.as_ptr(), data.len() as CC_LONG, buf.as_mut_ptr());
                     buf.to_vec()
                 }
                 Digest::Sha512 => {
                     let mut buf = [0; CC_SHA512_DIGEST_LENGTH];
-                    CC_SHA512(data.as_ptr(), data.len() as u32, buf.as_mut_ptr());
+                    CC_SHA512(data.as_ptr(), data.len() as CC_LONG, buf.as_mut_ptr());
                     buf.to_vec()
                 }
             }
@@ -640,10 +678,17 @@ impl Digest {
     }
 }
 
-#[cfg(target_os = "macos")]
+// FIXME ideally we'd pull these in from elsewhere
+const CC_SHA224_DIGEST_LENGTH: usize = 28;
+const CC_SHA256_DIGEST_LENGTH: usize = 32;
+const CC_SHA384_DIGEST_LENGTH: usize = 48;
+const CC_SHA512_DIGEST_LENGTH: usize = 64;
+#[allow(non_camel_case_types)]
+type CC_LONG = u32;
+
 extern "C" {
-    fn CC_SHA224(data: *const u8, len: u32, md: *mut u8) -> *mut u8;
-    fn CC_SHA256(data: *const u8, len: u32, md: *mut u8) -> *mut u8;
-    fn CC_SHA384(data: *const u8, len: u32, md: *mut u8) -> *mut u8;
-    fn CC_SHA512(data: *const u8, len: u32, md: *mut u8) -> *mut u8;
+    fn CC_SHA224(data: *const u8, len: CC_LONG, md: *mut u8) -> *mut u8;
+    fn CC_SHA256(data: *const u8, len: CC_LONG, md: *mut u8) -> *mut u8;
+    fn CC_SHA384(data: *const u8, len: CC_LONG, md: *mut u8) -> *mut u8;
+    fn CC_SHA512(data: *const u8, len: CC_LONG, md: *mut u8) -> *mut u8;
 }

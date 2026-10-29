@@ -13,16 +13,31 @@ impl Aligned4 {
     /// # Panics
     /// Panics if N is greater than 4
     #[inline]
-    pub const fn from_ascii_bytes<const N: usize>(src: &[AsciiByte; N]) -> Self {
+    pub const fn from_bytes<const N: usize>(src: &[u8; N]) -> Self {
         let mut bytes = [0; 4];
         let mut i = 0;
         // The function documentation defines when panics may occur
-        #[expect(clippy::indexing_slicing)]
+        #[allow(clippy::indexing_slicing)]
         while i < N {
-            bytes[i] = src[i] as u8;
+            bytes[i] = src[i];
             i += 1;
         }
         Self(u32::from_ne_bytes(bytes))
+    }
+
+    #[inline]
+    pub const fn from_ascii_bytes<const N: usize>(src: &[AsciiByte; N]) -> Self {
+        Self::from_bytes::<N>(unsafe { core::mem::transmute::<&[AsciiByte; N], &[u8; N]>(src) })
+    }
+
+    #[inline]
+    pub const fn to_bytes(&self) -> [u8; 4] {
+        self.0.to_ne_bytes()
+    }
+
+    #[inline]
+    pub const fn to_ascii_bytes(&self) -> [AsciiByte; 4] {
+        unsafe { core::mem::transmute(self.to_bytes()) }
     }
 
     pub const fn len(&self) -> usize {
@@ -126,33 +141,23 @@ impl Aligned4 {
         (upper_alpha & mask) == 0
     }
 
-    pub const fn to_ascii_lowercase(&self) -> [AsciiByte; 4] {
+    pub const fn to_ascii_lowercase(&self) -> Self {
         let word = self.0;
-        let mask = ((word + 0x3f3f_3f3f) & !(word + 0x2525_2525) & 0x8080_8080) >> 2;
-        let result = word | mask;
-        // SAFETY: The existing word is ASCII, and it is bitwise-ORed with `mask`,
-        // a subset of 0x20_20_20_... (0x80_... >> 2), which keeps the word
-        // in the ASCII range (all bytes <= 127).
-        unsafe { AsciiByte::to_ascii_byte_array(&result.to_ne_bytes()) }
+        let result = word | (((word + 0x3f3f_3f3f) & !(word + 0x2525_2525) & 0x8080_8080) >> 2);
+        Self(result)
     }
 
-    pub const fn to_ascii_titlecase(&self) -> [AsciiByte; 4] {
+    pub const fn to_ascii_titlecase(&self) -> Self {
         let word = self.0.to_le();
         let mask = ((word + 0x3f3f_3f1f) & !(word + 0x2525_2505) & 0x8080_8080) >> 2;
         let result = (word | mask) & !(0x20 & mask);
-        // SAFETY: The existing word is ASCII, and it is bitwise-ORed with `mask`, a subset of 0x20_20_20_...
-        // (0x80_... >> 2), which keeps the word in the ASCII range (all bytes <= 127). It is then ANDed
-        // which cannot introduce new bits.
-        unsafe { AsciiByte::to_ascii_byte_array(&u32::from_le(result).to_ne_bytes()) }
+        Self(u32::from_le(result))
     }
 
-    pub const fn to_ascii_uppercase(&self) -> [AsciiByte; 4] {
+    pub const fn to_ascii_uppercase(&self) -> Self {
         let word = self.0;
-        let mask = !(((word + 0x1f1f_1f1f) & !(word + 0x0505_0505) & 0x8080_8080) >> 2);
-        let result = word & mask;
-        // SAFETY: The existing word is ASCII, and it is bitwise-ANDed with `mask`,
-        // which cannot introduce new bits, so it stays ASCII.
-        unsafe { AsciiByte::to_ascii_byte_array(&result.to_ne_bytes()) }
+        let result = word & !(((word + 0x1f1f_1f1f) & !(word + 0x0505_0505) & 0x8080_8080) >> 2);
+        Self(result)
     }
 }
 
@@ -165,16 +170,31 @@ impl Aligned8 {
     /// # Panics
     /// Panics if N is greater than 8
     #[inline]
-    pub const fn from_ascii_bytes<const N: usize>(src: &[AsciiByte; N]) -> Self {
+    pub const fn from_bytes<const N: usize>(src: &[u8; N]) -> Self {
         let mut bytes = [0; 8];
         let mut i = 0;
         // The function documentation defines when panics may occur
-        #[expect(clippy::indexing_slicing)]
+        #[allow(clippy::indexing_slicing)]
         while i < N {
-            bytes[i] = src[i] as u8;
+            bytes[i] = src[i];
             i += 1;
         }
         Self(u64::from_ne_bytes(bytes))
+    }
+
+    #[inline]
+    pub const fn from_ascii_bytes<const N: usize>(src: &[AsciiByte; N]) -> Self {
+        Self::from_bytes::<N>(unsafe { core::mem::transmute::<&[AsciiByte; N], &[u8; N]>(src) })
+    }
+
+    #[inline]
+    pub const fn to_bytes(&self) -> [u8; 8] {
+        self.0.to_ne_bytes()
+    }
+
+    #[inline]
+    pub const fn to_ascii_bytes(&self) -> [AsciiByte; 8] {
+        unsafe { core::mem::transmute(self.to_bytes()) }
     }
 
     pub const fn len(&self) -> usize {
@@ -263,41 +283,33 @@ impl Aligned8 {
         (upper_alpha & mask) == 0
     }
 
-    pub const fn to_ascii_lowercase(&self) -> [AsciiByte; 8] {
+    pub const fn to_ascii_lowercase(&self) -> Self {
         let word = self.0;
-        let mask = ((word + 0x3f3f_3f3f_3f3f_3f3f)
-            & !(word + 0x2525_2525_2525_2525)
-            & 0x8080_8080_8080_8080)
-            >> 2;
-        let result = word | mask;
-        // SAFETY: The existing word is ASCII, and it is bitwise-ORed with `mask`,
-        // a subset of 0x20_20_20_... (0x80_... >> 2), which keeps the word
-        // in the ASCII range (all bytes <= 127).
-        unsafe { AsciiByte::to_ascii_byte_array(&result.to_ne_bytes()) }
+        let result = word
+            | (((word + 0x3f3f_3f3f_3f3f_3f3f)
+                & !(word + 0x2525_2525_2525_2525)
+                & 0x8080_8080_8080_8080)
+                >> 2);
+        Self(result)
     }
 
-    pub const fn to_ascii_titlecase(&self) -> [AsciiByte; 8] {
+    pub const fn to_ascii_titlecase(&self) -> Self {
         let word = self.0.to_le();
         let mask = ((word + 0x3f3f_3f3f_3f3f_3f1f)
             & !(word + 0x2525_2525_2525_2505)
             & 0x8080_8080_8080_8080)
             >> 2;
         let result = (word | mask) & !(0x20 & mask);
-        // SAFETY: The existing word is ASCII, and it is bitwise-ORed with `mask`, a subset of 0x20_20_20_...
-        // (0x80_... >> 2), which keeps the word in the ASCII range (all bytes <= 127). It is then ANDed
-        // which cannot introduce new bits.
-        unsafe { AsciiByte::to_ascii_byte_array(&u64::from_le(result).to_ne_bytes()) }
+        Self(u64::from_le(result))
     }
 
-    pub const fn to_ascii_uppercase(&self) -> [AsciiByte; 8] {
+    pub const fn to_ascii_uppercase(&self) -> Self {
         let word = self.0;
-        let mask = !(((word + 0x1f1f_1f1f_1f1f_1f1f)
-            & !(word + 0x0505_0505_0505_0505)
-            & 0x8080_8080_8080_8080)
-            >> 2);
-        let result = word & mask;
-        // SAFETY: The existing word is ASCII, and it is bitwise-ANDed with `mask`,
-        // which cannot introduce new bits, so it stays ASCII.
-        unsafe { AsciiByte::to_ascii_byte_array(&result.to_ne_bytes()) }
+        let result = word
+            & !(((word + 0x1f1f_1f1f_1f1f_1f1f)
+                & !(word + 0x0505_0505_0505_0505)
+                & 0x8080_8080_8080_8080)
+                >> 2);
+        Self(result)
     }
 }

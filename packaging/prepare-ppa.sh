@@ -38,5 +38,6 @@ echo "Checking offline build wiring..."
 CARGO_HOME="${root}/debian/cargo_home" cargo fetch --locked --offline 2>/dev/null || true
 
 echo "Ready."
-echo "  vendor/ and .cargo/config.toml are in place (gitignored)."
-echo "  Next: ./packaging/build-ppa-source.sh noble"
+echo "  vendor/ and .cargo/config.toml are in place (gitignored locally;"
+echo "  they must be present in the source package / recipe tree)."
+echo "  Next: ./packaging/build-ppa-source.sh jammy"

@@ -30,7 +30,7 @@ impl SecIdentityExt for SecIdentity {
         unsafe {
             let mut identity = ptr::null_mut();
             cvt(SecIdentityCreateWithCertificate(
-                if !keychains.is_empty() { keychains.as_CFTypeRef() } else { ptr::null() },
+                if keychains.len() > 0 {keychains.as_CFTypeRef()} else {ptr::null()},
                 certificate.as_concrete_TypeRef(),
                 &mut identity,
             ))?;
@@ -69,14 +69,14 @@ mod test {
     fn with_certificate() {
         let dir = p!(tempdir());
 
-        let keychain = p!(CreateOptions::new()
+        let mut keychain = p!(CreateOptions::new()
             .password("foobar")
             .create(dir.path().join("test.keychain")));
 
         let key = include_bytes!("../../../test/server.key");
         p!(ImportOptions::new()
             .filename("server.key")
-            .keychain(&keychain)
+            .keychain(&mut keychain)
             .import(key));
 
         let cert = test::certificate();

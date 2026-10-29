@@ -37,13 +37,10 @@ unsafe impl ioctl::Ioctl for Tiocsctty {
     type Output = ();
 
     const IS_MUTATING: bool = false;
-
-    fn opcode(&self) -> ioctl::Opcode {
-        c::TIOCSCTTY as ioctl::Opcode
-    }
+    const OPCODE: ioctl::Opcode = ioctl::Opcode::old(c::TIOCSCTTY as ioctl::RawOpcode);
 
     fn as_ptr(&mut self) -> *mut c::c_void {
-        crate::utils::as_ptr(&0_u32) as *mut c::c_void
+        (&0_u32) as *const u32 as *mut c::c_void
     }
 
     unsafe fn output_from_ptr(

@@ -5,10 +5,9 @@
 [package]
 name = "icu_provider"
 description = "Trait and struct definitions for the ICU data provider"
-categories.workspace = true
-keywords = ["data-loading", "data"]
 
 authors.workspace = true
+categories.workspace = true
 edition.workspace = true
 homepage.workspace = true
 include.workspace = true
@@ -22,15 +21,16 @@ all-features = true
 
 [dependencies]
 displaydoc = { workspace = true }
-icu_locale_core = { workspace = true }
-stable_deref_trait = { workspace = true, optional = true }
-writeable = { workspace = true, optional = true }
-yoke = { workspace = true, features = ["derive"] }
-zerofrom = { workspace = true, features = ["derive"] }
+icu_locid = { workspace = true }
+stable_deref_trait = { workspace = true }
+writeable = { workspace = true }
+tinystr = { workspace = true }
+yoke = { workspace = true, features = ["alloc", "derive"] }
+zerofrom = { workspace = true, features = ["alloc", "derive"] }
 zerovec = { workspace = true, features = ["derive"]}
 
-# baked
-zerotrie = { workspace = true, optional = true }
+# macros
+icu_provider_macros = { workspace = true, optional = true }
 
 # log
 log = { workspace = true, optional = true }
@@ -38,28 +38,32 @@ log = { workspace = true, optional = true }
 # serde
 bincode = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
-serde = { workspace = true, features = ["derive"], optional = true }
+serde = { workspace = true, features = ["derive", "alloc"], optional = true }
 serde_json = { workspace = true, optional = true }
 
-# export
-erased-serde = { workspace = true, optional = true }
+# datagen
+erased-serde = { workspace = true, optional = true, features = ["alloc"] }
 databake = { workspace = true, optional = true, features = ["derive"] }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 icu = { path = "../../components/icu", default-features = false }
-icu_locale = { path = "../../components/locale" }
-icu_provider_adapters = { path = "../adapters", default-features = false }
+icu_provider_adapters = { path = "../adapters" }
+icu_locid_transform = { path = "../../components/locid_transform" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = { workspace = true }
 
 [features]
-std = ["alloc"]
-alloc = ["icu_locale_core/alloc", "serde?/alloc", "yoke/alloc", "zerofrom/alloc", "zerovec/alloc", "zerotrie?/alloc", "dep:stable_deref_trait", "dep:writeable"]
+bench = []
+std = ["icu_locid/std"]
 sync = []
+experimental = []
+macros = ["dep:icu_provider_macros"]
 # Enable logging of additional context of data errors
 logging = ["dep:log"]
+# Legacy name
+log_error_context = ["logging"]
 
 # Enable BufferProvider and other deserialization infrastructure
 serde = ["dep:serde", "yoke/serde"]
@@ -69,14 +73,8 @@ deserialize_json = ["serde", "dep:serde_json"]
 deserialize_bincode_1 = ["serde", "dep:bincode", "std"]
 deserialize_postcard_1 = ["serde", "dep:postcard"]
 
-# Dependencies for baked provider scaffolding
-baked = ["dep:zerotrie", "dep:writeable"]
-
 # Dependencies for running data generation
-export = ["serde", "dep:erased-serde", "dep:databake", "std", "sync", "dep:postcard", "zerovec/databake"]
-
-# added by accident
-zerotrie = []
+datagen = ["serde", "dep:erased-serde", "dep:databake", "std", "sync"]
 
 [package.metadata.cargo-all-features]
 denylist = ["macros"]
@@ -89,6 +87,3 @@ bench = false  # This option is required for Benchmark CI
 [[bench]]
 name = "data_locale_bench"
 harness = false
-
-[lints]
-workspace = true

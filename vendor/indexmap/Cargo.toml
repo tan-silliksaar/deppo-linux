@@ -10,10 +10,10 @@
 # See Cargo.toml.orig for the original contents.
 
 [package]
-edition = "2024"
-rust-version = "1.85"
+edition = "2021"
+rust-version = "1.63"
 name = "indexmap"
-version = "2.14.2"
+version = "2.11.4"
 build = false
 autolib = false
 autobins = false
@@ -106,7 +106,7 @@ version = "1.0"
 default-features = false
 
 [dependencies.hashbrown]
-version = "0.17"
+version = ">= 0.15.0, < 0.17.0"
 default-features = false
 
 [dependencies.quickcheck]
@@ -139,7 +139,7 @@ version = "1.0"
 version = "0.14"
 
 [dev-dependencies.quickcheck]
-version = "1.1"
+version = "1.0"
 default-features = false
 
 [dev-dependencies.serde]
@@ -154,17 +154,6 @@ default-features = false
 
 [lints.clippy]
 style = "allow"
-
-[lints.rust]
-private_bounds = "deny"
-private_interfaces = "deny"
-unnameable_types = "deny"
-unreachable_pub = "deny"
-unsafe_code = "deny"
-
-[lints.rust.rust_2018_idioms]
-level = "warn"
-priority = -1
 
 [profile.bench]
 debug = 2

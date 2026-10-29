@@ -6,7 +6,7 @@
 
 mod borrowed;
 mod kv;
-#[expect(clippy::module_inception)] // module is purely internal
+#[allow(clippy::module_inception)] // module is purely internal
 pub(crate) mod map;
 mod vecs;
 

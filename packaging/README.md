@@ -42,7 +42,12 @@ Repeat for other series (same upstream, new changelog distribution via the scrip
 
 ## Recipe text (optional)
 
-If the Git branch already contains `debian/` and vendored crates:
+Launchpad recipes have **no network**, so the Git branch the recipe builds
+must already contain a complete `vendor/` tree and a matching
+`.cargo/config.toml` (run `./packaging/prepare-ppa.sh` and commit those, or
+prefer the `dput` source-package flow above which embeds them in the
+`.orig.tar.xz`). A recipe against a branch that only has `debian/` will fail
+at `cargo build --offline`.
 
 ```text
 # git-build-recipe format 0.4 deb-version {debversion}~{revtime}
@@ -50,6 +55,23 @@ lp:~deppo/deppo/+git/deppo main
 ```
 
 Request builds for **jammy**, **noble**, and any newer series you support. Launchpad rewrites the changelog distribution per series when using recipes.
+
+## Regenerating Cargo.lock
+
+Keep `Cargo.lock` at **version = 3** and free of edition-2024 crates
+(`wit-bindgen`, etc.). Prefer regenerating with a modern toolchain plus:
+
+```toml
+# .cargo/config.toml (local only; prepare-ppa.sh overwrites this with vendor sources)
+[resolver]
+incompatible-rust-versions = "fallback"
+```
+
+Do **not** run an unpinned `cargo update` on a new toolchain without checking
+the lock afterward — crates like `tempfile` ≥ 3.15 pull `getrandom` 0.3 →
+`wasip2` → `wit-bindgen`, which jammy's cargo 1.75 cannot parse when
+vendoring. The pins in `Cargo.toml` (`getrandom`, `ignore`, `globset`,
+`tempfile`) are intentional.
 
 ## What users install
 

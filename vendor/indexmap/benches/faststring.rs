@@ -33,10 +33,8 @@ impl<'a, S> From<&'a S> for &'a OneShot<str>
 where
     S: AsRef<str>,
 {
-    #[allow(unsafe_code)]
     fn from(s: &'a S) -> Self {
         let s: &str = s.as_ref();
-        // SAFETY: OneShot is a `repr(transparent)` wrapper
         unsafe { &*(s as *const str as *const OneShot<str>) }
     }
 }
@@ -117,7 +115,6 @@ fn lookup_hashmap_10_000_exist_string(b: &mut Bencher) {
     let lookups = (5000..c).map(|x| x.to_string()).collect::<Vec<_>>();
     b.iter(|| {
         let mut found = 0;
-        #[expect(clippy::unnecessary_get_then_check)]
         for key in &lookups {
             found += map.get(key).is_some() as i32;
         }
@@ -138,7 +135,6 @@ fn lookup_hashmap_10_000_exist_string_oneshot(b: &mut Bencher) {
         .collect::<Vec<_>>();
     b.iter(|| {
         let mut found = 0;
-        #[expect(clippy::unnecessary_get_then_check)]
         for key in &lookups {
             found += map.get(key).is_some() as i32;
         }

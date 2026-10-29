@@ -7,12 +7,14 @@ use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 
 use core_foundation_sys::base::CFTypeRef;
-use security_framework_sys::base::{errSecNoTrustSettings, errSecSuccess};
+use security_framework_sys::base::errSecNoTrustSettings;
+use security_framework_sys::base::errSecSuccess;
 use security_framework_sys::trust_settings::*;
 
 use std::ptr;
 
-use crate::base::{Error, Result};
+use crate::base::Error;
+use crate::base::Result;
 use crate::certificate::SecCertificate;
 use crate::cvt;
 
@@ -30,7 +32,7 @@ pub enum Domain {
 
 impl From<Domain> for SecTrustSettingsDomain {
     #[inline]
-    fn from(domain: Domain) -> Self {
+    fn from(domain: Domain) -> SecTrustSettingsDomain {
         match domain {
             Domain::User => kSecTrustSettingsDomainUser,
             Domain::Admin => kSecTrustSettingsDomainAdmin,
@@ -62,7 +64,7 @@ pub enum TrustSettingsForCertificate {
 impl TrustSettingsForCertificate {
     /// Create from `kSecTrustSettingsResult*` constant
     fn new(value: i64) -> Self {
-        if value < 0 || value > i64::from(u32::MAX) {
+        if value < 0 || value > i64::from(u32::max_value()) {
             return Self::Invalid;
         }
         match value as u32 {
@@ -89,7 +91,7 @@ impl TrustSettings {
     /// to learn what the aggregate trust setting for that certificate within this domain.
     #[inline(always)]
     #[must_use]
-    pub const fn new(domain: Domain) -> Self {
+    pub fn new(domain: Domain) -> Self {
         Self { domain }
     }
 
@@ -125,13 +127,13 @@ impl TrustSettings {
     ///
     /// It is not possible to modify per-user trust settings when not running in a GUI
     /// environment, if you try it will return error `2070: errSecInternalComponent`
-    #[cfg(target_os = "macos")]
+    #[cfg(target_os="macos")]
     pub fn set_trust_settings_always(&self, cert: &SecCertificate) -> Result<()> {
         let domain = self.domain;
         let trust_settings: CFTypeRef = ptr::null_mut();
         cvt(unsafe {
             SecTrustSettingsSetTrustSettings(
-                cert.as_concrete_TypeRef(),
+                cert.as_CFTypeRef() as *mut _,
                 domain.into(),
                 trust_settings,
             )
@@ -150,11 +152,14 @@ impl TrustSettings {
     /// given domain `None` is returned.
     ///
     /// Otherwise, the specific trust settings are aggregated and returned.
-    pub fn tls_trust_settings_for_certificate(&self, cert: &SecCertificate) -> Result<Option<TrustSettingsForCertificate>> {
+    pub fn tls_trust_settings_for_certificate(&self, cert: &SecCertificate)
+        -> Result<Option<TrustSettingsForCertificate>> {
         let trust_settings = unsafe {
             let mut array_ptr: CFArrayRef = ptr::null_mut();
             let cert_ptr = cert.as_CFTypeRef() as *mut _;
-            cvt(SecTrustSettingsCopyTrustSettings(cert_ptr, self.domain.into(), &mut array_ptr))?;
+            cvt(SecTrustSettingsCopyTrustSettings(cert_ptr,
+                                                  self.domain.into(),
+                                                  &mut array_ptr))?;
             CFArray::<CFDictionary>::wrap_under_create_rule(array_ptr)
         };
 
@@ -168,7 +173,7 @@ impl TrustSettings {
                     .find(policy_name_key.as_CFTypeRef().cast())
                     .map(|name| unsafe { CFString::wrap_under_get_rule((*name).cast()) });
 
-                matches!(maybe_name, Some(name) if name != ssl_policy_name)
+                matches!(maybe_name, Some(ref name) if name != &ssl_policy_name)
             };
 
             if is_not_ssl_policy {
@@ -290,9 +295,11 @@ mod test {
     fn test_unknown_cert_is_not_trusted() {
         let ts = TrustSettings::new(Domain::System);
         let cert = certificate();
-        assert_eq!(
-            ts.tls_trust_settings_for_certificate(&cert).err().unwrap().message(),
-            Some("The specified item could not be found in the keychain.".into())
-        );
+        assert_eq!(ts.tls_trust_settings_for_certificate(&cert)
+                   .err()
+                   .unwrap()
+                   .message(),
+                   Some("The specified item could not be found in the keychain.".into()));
     }
 }
+

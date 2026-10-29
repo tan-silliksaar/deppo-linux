@@ -1,6 +1,10 @@
-use std::{env, io::Write, path::Path};
+use std::env;
+use std::io::{self, Write};
+use std::path::Path;
+use std::thread;
 
-use {bstr::ByteVec, ignore::WalkBuilder, walkdir::WalkDir};
+use ignore::WalkBuilder;
+use walkdir::WalkDir;
 
 fn main() {
     let mut path = env::args().nth(1).unwrap();
@@ -15,11 +19,10 @@ fn main() {
         simple = true;
     }
 
-    let stdout_thread = std::thread::spawn(move || {
-        let mut stdout = std::io::BufWriter::new(std::io::stdout());
+    let stdout_thread = thread::spawn(move || {
+        let mut stdout = io::BufWriter::new(io::stdout());
         for dent in rx {
-            stdout.write_all(&Vec::from_path_lossy(dent.path())).unwrap();
-            stdout.write_all(b"\n").unwrap();
+            write_path(&mut stdout, dent.path());
         }
     });
 
@@ -61,4 +64,17 @@ impl DirEntry {
             DirEntry::Y(ref y) => y.path(),
         }
     }
+}
+
+#[cfg(unix)]
+fn write_path<W: Write>(mut wtr: W, path: &Path) {
+    use std::os::unix::ffi::OsStrExt;
+    wtr.write(path.as_os_str().as_bytes()).unwrap();
+    wtr.write(b"\n").unwrap();
+}
+
+#[cfg(not(unix))]
+fn write_path<W: Write>(mut wtr: W, path: &Path) {
+    wtr.write(path.to_string_lossy().as_bytes()).unwrap();
+    wtr.write(b"\n").unwrap();
 }

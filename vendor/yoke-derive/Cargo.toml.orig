@@ -5,15 +5,14 @@
 [package]
 name = "yoke-derive"
 description = "Custom derive for the yoke crate"
-version = "0.8.4"
+version = "0.7.5"
 categories = ["data-structures", "memory-management", "caching", "no-std"]
-keywords = ["macros", "derive", "zero-copy", "serialization", "self-referential"]
+keywords = ["zerocopy", "serialization", "lifetime", "borrow", "self-referential"]
 authors = ["Manish Goregaokar <manishsmail@gmail.com>"]
 
-edition = "2021"
+edition.workspace = true
 license.workspace = true
 repository.workspace = true
-rust-version = "1.82"
 
 [package.metadata.workspaces]
 independent = true
@@ -25,12 +24,9 @@ path = "src/lib.rs"
 [dependencies]
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
-syn = { workspace = true, features = ["fold", "visit"] }
+syn = { workspace = true, features = ["fold"] }
 synstructure = { workspace = true }
 
 [dev-dependencies]
 yoke = { path = "..", features = ["derive"] }
-zerovec = { path = "../../../utils/zerovec", features = ["alloc", "yoke"] }
-
-[lints]
-workspace = true
+zerovec = { path = "../../../utils/zerovec", features = ["yoke"] }

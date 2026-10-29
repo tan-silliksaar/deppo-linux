@@ -46,9 +46,11 @@ See the documentation for `WalkBuilder` for many other options.
 
 #![deny(missing_docs)]
 
+use std::error;
+use std::fmt;
+use std::io;
 use std::path::{Path, PathBuf};
 
-pub use crate::incremental::{IncrementalIgnore, IncrementalMatch};
 pub use crate::walk::{
     DirEntry, ParallelVisitor, ParallelVisitorBuilder, Walk, WalkBuilder,
     WalkParallel, WalkState,
@@ -57,7 +59,6 @@ pub use crate::walk::{
 mod default_types;
 mod dir;
 pub mod gitignore;
-mod incremental;
 pub mod overrides;
 mod pathutil;
 pub mod types;
@@ -100,7 +101,7 @@ pub enum Error {
         child: PathBuf,
     },
     /// An error that occurs when doing I/O, such as reading an ignore file.
-    Io(std::io::Error),
+    Io(io::Error),
     /// An error that occurs when trying to parse a glob.
     Glob {
         /// The original glob that caused this error. This glob, when
@@ -124,23 +125,21 @@ impl Clone for Error {
         match *self {
             Error::Partial(ref errs) => Error::Partial(errs.clone()),
             Error::WithLineNumber { line, ref err } => {
-                Error::WithLineNumber { line, err: err.clone() }
+                Error::WithLineNumber { line: line, err: err.clone() }
             }
             Error::WithPath { ref path, ref err } => {
                 Error::WithPath { path: path.clone(), err: err.clone() }
             }
             Error::WithDepth { depth, ref err } => {
-                Error::WithDepth { depth, err: err.clone() }
+                Error::WithDepth { depth: depth, err: err.clone() }
             }
             Error::Loop { ref ancestor, ref child } => Error::Loop {
                 ancestor: ancestor.clone(),
                 child: child.clone(),
             },
             Error::Io(ref err) => match err.raw_os_error() {
-                Some(e) => Error::Io(std::io::Error::from_raw_os_error(e)),
-                None => {
-                    Error::Io(std::io::Error::new(err.kind(), err.to_string()))
-                }
+                Some(e) => Error::Io(io::Error::from_raw_os_error(e)),
+                None => Error::Io(io::Error::new(err.kind(), err.to_string())),
             },
             Error::Glob { ref glob, ref err } => {
                 Error::Glob { glob: glob.clone(), err: err.clone() }
@@ -184,22 +183,22 @@ impl Error {
         }
     }
 
-    /// Inspect the original [`std::io::Error`] if there is one.
+    /// Inspect the original [`io::Error`] if there is one.
     ///
     /// [`None`] is returned if the [`Error`] doesn't correspond to an
-    /// [`std::io::Error`]. This might happen, for example, when the error was
+    /// [`io::Error`]. This might happen, for example, when the error was
     /// produced because a cycle was found in the directory tree while
     /// following symbolic links.
     ///
     /// This method returns a borrowed value that is bound to the lifetime of the [`Error`]. To
     /// obtain an owned value, the [`into_io_error`] can be used instead.
     ///
-    /// > This is the original [`std::io::Error`] and is _not_ the same as
-    /// > [`impl From<Error> for std::io::Error`][impl] which contains
-    /// > additional context about the error.
+    /// > This is the original [`io::Error`] and is _not_ the same as
+    /// > [`impl From<Error> for std::io::Error`][impl] which contains additional context about the
+    /// error.
     ///
     /// [`None`]: https://doc.rust-lang.org/stable/std/option/enum.Option.html#variant.None
-    /// [`std::io::Error`]: https://doc.rust-lang.org/stable/std/io/struct.Error.html
+    /// [`io::Error`]: https://doc.rust-lang.org/stable/std/io/struct.Error.html
     /// [`From`]: https://doc.rust-lang.org/stable/std/convert/trait.From.html
     /// [`Error`]: struct.Error.html
     /// [`into_io_error`]: struct.Error.html#method.into_io_error
@@ -225,10 +224,10 @@ impl Error {
     }
 
     /// Similar to [`io_error`] except consumes self to convert to the original
-    /// [`std::io::Error`] if one exists.
+    /// [`io::Error`] if one exists.
     ///
     /// [`io_error`]: struct.Error.html#method.io_error
-    /// [`std::io::Error`]: https://doc.rust-lang.org/stable/std/io/struct.Error.html
+    /// [`io::Error`]: https://doc.rust-lang.org/stable/std/io/struct.Error.html
     pub fn into_io_error(self) -> Option<std::io::Error> {
         match self {
             Error::Partial(mut errs) => {
@@ -269,7 +268,7 @@ impl Error {
 
     /// Turn an error into a tagged error with the given depth.
     fn with_depth(self, depth: usize) -> Error {
-        Error::WithDepth { depth, err: Box::new(self) }
+        Error::WithDepth { depth: depth, err: Box::new(self) }
     }
 
     /// Turn an error into a tagged error with the given file path and line
@@ -288,7 +287,7 @@ impl Error {
         let depth = err.depth();
         if let (Some(anc), Some(child)) = (err.loop_ancestor(), err.path()) {
             return Error::WithDepth {
-                depth,
+                depth: depth,
                 err: Box::new(Error::Loop {
                     ancestor: anc.to_path_buf(),
                     child: child.to_path_buf(),
@@ -296,18 +295,15 @@ impl Error {
             };
         }
         let path = err.path().map(|p| p.to_path_buf());
-        let mut ig_err = Error::WithDepth {
-            depth,
-            err: Box::new(Error::Io(std::io::Error::from(err))),
-        };
+        let mut ig_err = Error::Io(io::Error::from(err));
         if let Some(path) = path {
-            ig_err = Error::WithPath { path, err: Box::new(ig_err) };
+            ig_err = Error::WithPath { path: path, err: Box::new(ig_err) };
         }
         ig_err
     }
 }
 
-impl std::error::Error for Error {
+impl error::Error for Error {
     #[allow(deprecated)]
     fn description(&self) -> &str {
         match *self {
@@ -324,8 +320,8 @@ impl std::error::Error for Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Error::Partial(ref errs) => {
                 let msgs: Vec<String> =
@@ -363,8 +359,8 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Error {
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
         Error::Io(err)
     }
 }
@@ -482,24 +478,29 @@ impl<T> Match<T> {
 
     /// Return the match if it is not none. Otherwise, return other.
     pub fn or(self, other: Self) -> Self {
-        if self.is_none() { other } else { self }
+        if self.is_none() {
+            other
+        } else {
+            self
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        env, fs,
-        path::{Path, PathBuf},
-    };
+    use std::env;
+    use std::error;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::result;
 
     /// A convenient result type alias.
-    pub(crate) type Result<T> =
-        std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+    pub type Result<T> =
+        result::Result<T, Box<dyn error::Error + Send + Sync>>;
 
     macro_rules! err {
         ($($tt:tt)*) => {
-            Box::<dyn std::error::Error + Send + Sync>::from(format!($($tt)*))
+            Box::<dyn error::Error + Send + Sync>::from(format!($($tt)*))
         }
     }
 
@@ -528,7 +529,7 @@ mod tests {
 
             let tmpdir = env::temp_dir();
             for _ in 0..TRIES {
-                let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+                let count = COUNTER.fetch_add(1, Ordering::SeqCst);
                 let path = tmpdir.join("rust-ignore").join(count.to_string());
                 if path.is_dir() {
                     continue;

@@ -3,7 +3,7 @@
 // (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
 
 use crate::codepointtrie::{CodePointTrie, CodePointTrieHeader, TrieValue};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error};
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use zerofrom::ZeroFrom;
 use zerovec::ZeroVec;
 
@@ -16,7 +16,7 @@ pub struct CodePointTrieSerde<'trie, T: TrieValue> {
     data: ZeroVec<'trie, T>,
 }
 
-impl<T: TrieValue + Serialize> Serialize for CodePointTrie<'_, T> {
+impl<'trie, T: TrieValue + Serialize> Serialize for CodePointTrie<'trie, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -39,48 +39,14 @@ where
         D: Deserializer<'de>,
     {
         let de = CodePointTrieSerde::deserialize(deserializer)?;
-        // SAFETY:
-        // `validate_fields` upholds the invariants for the fields that
-        // fast-path access without bound checks relies on.
-        let (error_value, null_value) = match CodePointTrie::validate_fields(
-            &de.header, &de.index, &de.data,
-        ) {
-            Ok(v) => v,
-            Err(e) => {
-                match e {
-                    super::CodePointTrieError::FromDeserialized { reason } => {
-                        // Not supposed to be returned by `validate_fields`.
-                        debug_assert!(false);
-                        return Err(D::Error::custom(reason));
-                    }
-                    super::CodePointTrieError::EmptyDataVector => {
-                        return Err(D::Error::custom(
-                            "CodePointTrie must be constructed from data vector with at least one element",
-                        ));
-                    }
-                    super::CodePointTrieError::IndexTooShortForFastAccess => {
-                        return Err(D::Error::custom(
-                            "CodePointTrie must be constructed from index vector long enough to accommodate fast-path access",
-                        ));
-                    }
-                    super::CodePointTrieError::DataTooShortForFastAccess => {
-                        return Err(D::Error::custom(
-                            "CodePointTrie must be constructed from data vector long enough to accommodate fast-path access",
-                        ));
-                    }
-                    super::CodePointTrieError::InvalidNullValue => {
-                        return Err(D::Error::custom("CodePointTrie has invalid null value"));
-                    }
-                }
-            }
-        };
-        // Field invariants upheld: Checked by `validate_fields` above.
+        let error_value = de.data.last().ok_or_else(|| {
+            D::Error::custom("CodePointTrie vector must have at least one element")
+        })?;
         Ok(CodePointTrie {
             header: de.header,
             index: de.index,
             data: de.data,
             error_value,
-            null_value,
         })
     }
 }

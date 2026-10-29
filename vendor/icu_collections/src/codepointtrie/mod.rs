@@ -29,8 +29,8 @@
 //!
 //! [`ICU4X`]: ../icu/index.html
 
-#[cfg(feature = "alloc")]
-mod builder;
+extern crate alloc;
+
 mod cptrie;
 mod error;
 mod impl_const;
@@ -42,16 +42,13 @@ pub mod toml;
 #[cfg(feature = "serde")]
 mod serde;
 
-#[cfg(feature = "alloc")]
-pub use builder::CodePointTrieBuilder;
 pub use cptrie::CodePointMapRange;
 pub use cptrie::CodePointMapRangeIterator;
 pub use cptrie::CodePointTrie;
 pub use cptrie::CodePointTrieHeader;
-pub use cptrie::FastCodePointTrie;
-pub use cptrie::SmallCodePointTrie;
 pub use cptrie::TrieType;
 pub use cptrie::TrieValue;
-pub use cptrie::Typed;
-pub use cptrie::TypedCodePointTrie;
 pub use error::Error as CodePointTrieError;
+
+#[doc(no_inline)]
+pub use CodePointTrieError as Error;

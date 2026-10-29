@@ -68,7 +68,7 @@ macro_rules! default_union {
                 core::mem::size_of_val(&u),
                 core::mem::size_of_val(&field_value)
             );
-            static_assertions::const_assert_eq!(memoffset::offset_of_union!($union, $field), 0);
+            const_assert_eq!(memoffset::offset_of_union!($union, $field), 0);
         }
 
         u

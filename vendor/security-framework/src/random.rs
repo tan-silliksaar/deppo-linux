@@ -1,6 +1,6 @@
 //! Randomness support.
 
-use security_framework_sys::random::{kSecRandomDefault, SecRandomCopyBytes, SecRandomRef};
+use security_framework_sys::random::{SecRandomCopyBytes, SecRandomRef, kSecRandomDefault};
 use std::io;
 
 /// A source of random data.

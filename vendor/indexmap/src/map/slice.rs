@@ -1,8 +1,8 @@
 use super::{
     Bucket, IndexMap, IntoIter, IntoKeys, IntoValues, Iter, IterMut, Keys, Values, ValuesMut,
 };
-use crate::GetDisjointMutError;
 use crate::util::{slice_eq, try_simplify_range};
+use crate::GetDisjointMutError;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -27,11 +27,11 @@ pub struct Slice<K, V> {
 // and reference lifetimes are bound together in function signatures.
 #[allow(unsafe_code)]
 impl<K, V> Slice<K, V> {
-    pub(crate) const fn from_slice(entries: &[Bucket<K, V>]) -> &Self {
+    pub(super) const fn from_slice(entries: &[Bucket<K, V>]) -> &Self {
         unsafe { &*(entries as *const [Bucket<K, V>] as *const Self) }
     }
 
-    pub(super) const fn from_mut_slice(entries: &mut [Bucket<K, V>]) -> &mut Self {
+    pub(super) fn from_mut_slice(entries: &mut [Bucket<K, V>]) -> &mut Self {
         unsafe { &mut *(entries as *mut [Bucket<K, V>] as *mut Self) }
     }
 
@@ -55,7 +55,7 @@ impl<K, V> Slice<K, V> {
     }
 
     /// Returns an empty mutable slice.
-    pub const fn new_mut<'a>() -> &'a mut Self {
+    pub fn new_mut<'a>() -> &'a mut Self {
         Self::from_mut_slice(&mut [])
     }
 
@@ -102,47 +102,30 @@ impl<K, V> Slice<K, V> {
     }
 
     /// Get the first key-value pair.
-    pub const fn first(&self) -> Option<(&K, &V)> {
-        if let [first, ..] = &self.entries {
-            Some(first.refs())
-        } else {
-            None
-        }
+    pub fn first(&self) -> Option<(&K, &V)> {
+        self.entries.first().map(Bucket::refs)
     }
 
     /// Get the first key-value pair, with mutable access to the value.
-    pub const fn first_mut(&mut self) -> Option<(&K, &mut V)> {
-        if let [first, ..] = &mut self.entries {
-            Some(first.ref_mut())
-        } else {
-            None
-        }
+    pub fn first_mut(&mut self) -> Option<(&K, &mut V)> {
+        self.entries.first_mut().map(Bucket::ref_mut)
     }
 
     /// Get the last key-value pair.
-    pub const fn last(&self) -> Option<(&K, &V)> {
-        if let [.., last] = &self.entries {
-            Some(last.refs())
-        } else {
-            None
-        }
+    pub fn last(&self) -> Option<(&K, &V)> {
+        self.entries.last().map(Bucket::refs)
     }
 
     /// Get the last key-value pair, with mutable access to the value.
-    pub const fn last_mut(&mut self) -> Option<(&K, &mut V)> {
-        if let [.., last] = &mut self.entries {
-            Some(last.ref_mut())
-        } else {
-            None
-        }
+    pub fn last_mut(&mut self) -> Option<(&K, &mut V)> {
+        self.entries.last_mut().map(Bucket::ref_mut)
     }
 
     /// Divides one slice into two at an index.
     ///
     /// ***Panics*** if `index > len`.
-    /// For a non-panicking alternative see [`split_at_checked`][Self::split_at_checked].
     #[track_caller]
-    pub const fn split_at(&self, index: usize) -> (&Self, &Self) {
+    pub fn split_at(&self, index: usize) -> (&Self, &Self) {
         let (first, second) = self.entries.split_at(index);
         (Self::from_slice(first), Self::from_slice(second))
     }
@@ -150,38 +133,15 @@ impl<K, V> Slice<K, V> {
     /// Divides one mutable slice into two at an index.
     ///
     /// ***Panics*** if `index > len`.
-    /// For a non-panicking alternative see [`split_at_mut_checked`][Self::split_at_mut_checked].
     #[track_caller]
-    pub const fn split_at_mut(&mut self, index: usize) -> (&mut Self, &mut Self) {
+    pub fn split_at_mut(&mut self, index: usize) -> (&mut Self, &mut Self) {
         let (first, second) = self.entries.split_at_mut(index);
         (Self::from_mut_slice(first), Self::from_mut_slice(second))
     }
 
-    /// Divides one slice into two at an index.
-    ///
-    /// Returns `None` if `index > len`.
-    pub const fn split_at_checked(&self, index: usize) -> Option<(&Self, &Self)> {
-        if let Some((first, second)) = self.entries.split_at_checked(index) {
-            Some((Self::from_slice(first), Self::from_slice(second)))
-        } else {
-            None
-        }
-    }
-
-    /// Divides one mutable slice into two at an index.
-    ///
-    /// Returns `None` if `index > len`.
-    pub const fn split_at_mut_checked(&mut self, index: usize) -> Option<(&mut Self, &mut Self)> {
-        if let Some((first, second)) = self.entries.split_at_mut_checked(index) {
-            Some((Self::from_mut_slice(first), Self::from_mut_slice(second)))
-        } else {
-            None
-        }
-    }
-
     /// Returns the first key-value pair and the rest of the slice,
     /// or `None` if it is empty.
-    pub const fn split_first(&self) -> Option<((&K, &V), &Self)> {
+    pub fn split_first(&self) -> Option<((&K, &V), &Self)> {
         if let [first, rest @ ..] = &self.entries {
             Some((first.refs(), Self::from_slice(rest)))
         } else {
@@ -191,7 +151,7 @@ impl<K, V> Slice<K, V> {
 
     /// Returns the first key-value pair and the rest of the slice,
     /// with mutable access to the value, or `None` if it is empty.
-    pub const fn split_first_mut(&mut self) -> Option<((&K, &mut V), &mut Self)> {
+    pub fn split_first_mut(&mut self) -> Option<((&K, &mut V), &mut Self)> {
         if let [first, rest @ ..] = &mut self.entries {
             Some((first.ref_mut(), Self::from_mut_slice(rest)))
         } else {
@@ -201,7 +161,7 @@ impl<K, V> Slice<K, V> {
 
     /// Returns the last key-value pair and the rest of the slice,
     /// or `None` if it is empty.
-    pub const fn split_last(&self) -> Option<((&K, &V), &Self)> {
+    pub fn split_last(&self) -> Option<((&K, &V), &Self)> {
         if let [rest @ .., last] = &self.entries {
             Some((last.refs(), Self::from_slice(rest)))
         } else {
@@ -211,7 +171,7 @@ impl<K, V> Slice<K, V> {
 
     /// Returns the last key-value pair and the rest of the slice,
     /// with mutable access to the value, or `None` if it is empty.
-    pub const fn split_last_mut(&mut self) -> Option<((&K, &mut V), &mut Self)> {
+    pub fn split_last_mut(&mut self) -> Option<((&K, &mut V), &mut Self)> {
         if let [rest @ .., last] = &mut self.entries {
             Some((last.ref_mut(), Self::from_mut_slice(rest)))
         } else {
@@ -244,7 +204,7 @@ impl<K, V> Slice<K, V> {
         Values::new(&self.entries)
     }
 
-    /// Return an iterator over mutable references to the values of the map slice.
+    /// Return an iterator over mutable references to the the values of the map slice.
     pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         ValuesMut::new(&mut self.entries)
     }
@@ -304,7 +264,8 @@ impl<K, V> Slice<K, V> {
     where
         K: PartialOrd,
     {
-        self.entries.is_sorted_by(|a, b| a.key <= b.key)
+        // TODO(MSRV 1.82): self.entries.is_sorted_by(|a, b| a.key <= b.key)
+        self.is_sorted_by_key(|k, _| k)
     }
 
     /// Checks if this slice is sorted using the given comparator function.
@@ -313,8 +274,17 @@ impl<K, V> Slice<K, V> {
     where
         F: FnMut(&'a K, &'a V, &'a K, &'a V) -> bool,
     {
-        self.entries
-            .is_sorted_by(move |a, b| cmp(&a.key, &a.value, &b.key, &b.value))
+        // TODO(MSRV 1.82): self.entries
+        //     .is_sorted_by(move |a, b| cmp(&a.key, &a.value, &b.key, &b.value))
+        let mut iter = self.entries.iter();
+        match iter.next() {
+            Some(mut prev) => iter.all(move |next| {
+                let sorted = cmp(&prev.key, &prev.value, &next.key, &next.value);
+                prev = next;
+                sorted
+            }),
+            None => true,
+        }
     }
 
     /// Checks if this slice is sorted using the given sort-key function.
@@ -324,8 +294,17 @@ impl<K, V> Slice<K, V> {
         F: FnMut(&'a K, &'a V) -> T,
         T: PartialOrd,
     {
-        self.entries
-            .is_sorted_by_key(move |a| sort_key(&a.key, &a.value))
+        // TODO(MSRV 1.82): self.entries
+        //     .is_sorted_by_key(move |a| sort_key(&a.key, &a.value))
+        let mut iter = self.entries.iter().map(move |a| sort_key(&a.key, &a.value));
+        match iter.next() {
+            Some(mut prev) => iter.all(move |next| {
+                let sorted = prev <= next;
+                prev = next;
+                sorted
+            }),
+            None => true,
+        }
     }
 
     /// Returns the index of the partition point of a sorted map according to the given predicate
@@ -350,9 +329,42 @@ impl<K, V> Slice<K, V> {
         &mut self,
         indices: [usize; N],
     ) -> Result<[(&K, &mut V); N], GetDisjointMutError> {
-        // TODO(MSRV 1.86): use the standard library's `slice::get_disjoint_mut`
-        let entries = super::disjoint::get_disjoint_mut(&mut self.entries, indices)?;
-        Ok(entries.map(Bucket::ref_mut))
+        let indices = indices.map(Some);
+        let key_values = self.get_disjoint_opt_mut(indices)?;
+        Ok(key_values.map(Option::unwrap))
+    }
+
+    #[allow(unsafe_code)]
+    pub(crate) fn get_disjoint_opt_mut<const N: usize>(
+        &mut self,
+        indices: [Option<usize>; N],
+    ) -> Result<[Option<(&K, &mut V)>; N], GetDisjointMutError> {
+        // SAFETY: Can't allow duplicate indices as we would return several mutable refs to the same data.
+        let len = self.len();
+        for i in 0..N {
+            if let Some(idx) = indices[i] {
+                if idx >= len {
+                    return Err(GetDisjointMutError::IndexOutOfBounds);
+                } else if indices[..i].contains(&Some(idx)) {
+                    return Err(GetDisjointMutError::OverlappingIndices);
+                }
+            }
+        }
+
+        let entries_ptr = self.entries.as_mut_ptr();
+        let out = indices.map(|idx_opt| {
+            match idx_opt {
+                Some(idx) => {
+                    // SAFETY: The base pointer is valid as it comes from a slice and the reference is always
+                    // in-bounds & unique as we've already checked the indices above.
+                    let kv = unsafe { (*(entries_ptr.add(idx))).ref_mut() };
+                    Some(kv)
+                }
+                None => None,
+            }
+        });
+
+        Ok(out)
     }
 }
 
@@ -578,7 +590,6 @@ mod tests {
         let slice = map.as_slice();
 
         // RangeFull
-        #[expect(clippy::redundant_slicing)]
         check(&vec[..], &map[..], &slice[..]);
 
         for i in 0usize..10 {

@@ -2,19 +2,6 @@
 // called LICENSE at the top level of the ICU4X source tree
 // (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
 
-// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
-#![cfg_attr(not(any(test, doc)), no_std)]
-#![cfg_attr(
-    not(test),
-    deny(
-        clippy::indexing_slicing,
-        clippy::unwrap_used,
-        clippy::expect_used,
-        clippy::panic,
-    )
-)]
-#![warn(missing_docs)]
-
 //! Definitions of [Unicode Properties] and APIs for
 //! retrieving property data in an appropriate data structure.
 //!
@@ -22,96 +9,108 @@
 //! and as part of the [`icu`](https://docs.rs/icu/latest/icu/) crate. See the latter for more details on the ICU4X project.
 //!
 //! APIs that return a [`CodePointSetData`] exist for binary properties and certain enumerated
-//! properties.
+//! properties. See the [`sets`] module for more details.
 //!
-//! APIs that return a [`CodePointMapData`] exist for certain enumerated properties.
+//! APIs that return a [`CodePointMapData`] exist for certain enumerated properties. See the
+//! [`maps`] module for more details.
 //!
 //! # Examples
 //!
 //! ## Property data as `CodePointSetData`s
 //!
 //! ```
-//! use icu::properties::{CodePointSetData, CodePointMapData};
-//! use icu::properties::props::{GeneralCategory, Emoji};
+//! use icu::properties::{maps, sets, GeneralCategory};
 //!
 //! // A binary property as a `CodePointSetData`
 //!
-//! assert!(CodePointSetData::new::<Emoji>().contains('🎃')); // U+1F383 JACK-O-LANTERN
-//! assert!(!CodePointSetData::new::<Emoji>().contains('木')); // U+6728
+//! assert!(sets::emoji().contains('🎃')); // U+1F383 JACK-O-LANTERN
+//! assert!(!sets::emoji().contains('木')); // U+6728
 //!
 //! // An individual enumerated property value as a `CodePointSetData`
 //!
-//! let line_sep_data = CodePointMapData::<GeneralCategory>::new()
+//! let line_sep_data = maps::general_category()
 //!     .get_set_for_value(GeneralCategory::LineSeparator);
 //! let line_sep = line_sep_data.as_borrowed();
 //!
-//! assert!(line_sep.contains('\u{2028}'));
-//! assert!(!line_sep.contains('\u{2029}'));
+//! assert!(line_sep.contains32(0x2028));
+//! assert!(!line_sep.contains32(0x2029));
 //! ```
 //!
 //! ## Property data as `CodePointMapData`s
 //!
 //! ```
-//! use icu::properties::CodePointMapData;
-//! use icu::properties::props::Script;
+//! use icu::properties::{maps, Script};
 //!
-//! assert_eq!(CodePointMapData::<Script>::new().get('🎃'), Script::Common); // U+1F383 JACK-O-LANTERN
-//! assert_eq!(CodePointMapData::<Script>::new().get('木'), Script::Han); // U+6728
+//! assert_eq!(maps::script().get('🎃'), Script::Common); // U+1F383 JACK-O-LANTERN
+//! assert_eq!(maps::script().get('木'), Script::Han); // U+6728
 //! ```
-//!
-//! # Harfbuzz
-//!
-//! The `harfbuzz_traits` Cargo feature can be used to add implementations of the [`harfbuzz_traits`] to
-//! `CodePointMap<GeneralCategory>`, `CodePointMap<BidiMirroringGlyph>`, and to enable the
-//! [`script::HarfbuzzScriptData`] type.
 //!
 //! [`ICU4X`]: ../icu/index.html
 //! [Unicode Properties]: https://unicode-org.github.io/icu/userguide/strings/properties.html
-//! [`CodePointSetData`]: crate::CodePointSetData
-//! [`CodePointMapData`]: crate::CodePointMapData
+//! [`CodePointSetData`]: crate::sets::CodePointSetData
+//! [`CodePointMapData`]: crate::maps::CodePointMapData
+//! [`sets`]: crate::sets
 
-#[cfg(feature = "alloc")]
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::indexing_slicing,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::exhaustive_structs,
+        clippy::exhaustive_enums,
+        missing_debug_implementations,
+    )
+)]
+#![warn(missing_docs)]
+
 extern crate alloc;
 
-mod code_point_set;
-pub use code_point_set::{CodePointSetData, CodePointSetDataBorrowed};
-mod code_point_map;
-pub use code_point_map::{CodePointMapData, CodePointMapDataBorrowed};
-mod emoji;
-pub use emoji::{EmojiSetData, EmojiSetDataBorrowed};
-mod names;
-pub use names::{
-    PropertyNamesLong, PropertyNamesLongBorrowed, PropertyNamesShort, PropertyNamesShortBorrowed,
-    PropertyParser, PropertyParserBorrowed,
-};
-mod runtime;
+#[cfg(feature = "bidi")]
+pub mod bidi;
 
-#[rustfmt::skip]
-mod enum_values;
+mod error;
+pub mod maps;
+
 // NOTE: The Pernosco debugger has special knowledge
 // of the `CanonicalCombiningClass` struct inside the `props`
 // module. Please do not change the crate-module-qualified
 // name of that struct without coordination.
-pub mod props;
-pub mod provider;
-pub mod script;
+mod props;
 
-mod bidi;
+pub mod bidi_data;
+pub mod exemplar_chars;
+pub mod provider;
+pub(crate) mod runtime;
+#[allow(clippy::exhaustive_structs)] // TODO
+pub mod script;
+pub mod sets;
 mod trievalue;
 
-mod private {
-    pub trait Sealed {}
+pub use props::{
+    BidiClass, CanonicalCombiningClass, EastAsianWidth, GeneralCategory, GeneralCategoryGroup,
+    GraphemeClusterBreak, HangulSyllableType, IndicSyllabicCategory, JoiningType, LineBreak,
+    Script, SentenceBreak, WordBreak,
+};
+
+/// Module for working with the names of property values
+pub mod names {
+    pub use crate::props::{
+        PropertyEnumToValueNameLinearMapper, PropertyEnumToValueNameLinearMapperBorrowed,
+    };
+    pub use crate::props::{
+        PropertyEnumToValueNameLinearTiny4Mapper, PropertyEnumToValueNameLinearTiny4MapperBorrowed,
+    };
+    pub use crate::props::{
+        PropertyEnumToValueNameSparseMapper, PropertyEnumToValueNameSparseMapperBorrowed,
+    };
+    pub use crate::props::{PropertyValueNameToEnumMapper, PropertyValueNameToEnumMapperBorrowed};
 }
 
-#[cfg(feature = "harfbuzz_traits")]
-mod harfbuzz;
+pub use error::PropertiesError;
 
-#[cfg(feature = "unstable")]
-#[cfg(feature = "alloc")]
-pub mod unicodeset_parse;
-
-#[cfg(not(feature = "unstable"))]
-#[cfg(feature = "alloc")]
-#[doc(hidden)]
-#[path = "unicodeset_parse/mod.rs"]
-pub mod unstable_unicodeset_parse;
+#[doc(no_inline)]
+pub use PropertiesError as Error;

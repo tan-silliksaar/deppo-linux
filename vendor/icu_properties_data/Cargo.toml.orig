@@ -5,12 +5,11 @@
 [package]
 name = "icu_properties_data"
 description = "Data for the icu_properties crate"
-categories.workspace = true
-keywords = ["data", "unicode"]
 license = "Unicode-3.0"
-version.workspace = true
+version = "1.5.1"
 
 authors.workspace = true
+categories.workspace = true
 edition.workspace = true
 homepage.workspace = true
 include.workspace = true
@@ -18,11 +17,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [package.metadata.sources]
-cldr = { tagged = "49.0.0" }
-unicode = { tagged = "18.0.0" }
+cldr = { tagged = "46.0.0-BETA2" }
+icuexport = { tagged = "icu4x/2024-05-16/75.x" }
 segmenter_lstm = { tagged = "v0.1.0" }
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(icu4x_custom_data)'] }
-
-[dependencies]

@@ -16,13 +16,13 @@ macro_rules! make_suites {
 
             #[inline(always)]
             #[must_use]
-            pub const fn from_raw(raw: SSLCipherSuite) -> Self {
+            pub fn from_raw(raw: SSLCipherSuite) -> Self {
                 Self(raw)
             }
 
             #[inline(always)]
             #[must_use]
-            pub const fn to_raw(&self) -> SSLCipherSuite {
+            pub fn to_raw(&self) -> SSLCipherSuite {
                 self.0
             }
         }

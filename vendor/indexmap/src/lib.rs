@@ -1,3 +1,6 @@
+// We *mostly* avoid unsafe code, but `Slice` allows it for DST casting.
+#![deny(unsafe_code)]
+#![warn(rust_2018_idioms)]
 #![no_std]
 
 //! [`IndexMap`] is a hash table where the iteration order of the key-value
@@ -57,7 +60,7 @@
 //! ### Alternate Hashers
 //!
 //! [`IndexMap`] and [`IndexSet`] have a default hasher type
-//! [`S = RandomState`][std::hash::RandomState],
+//! [`S = RandomState`][std::collections::hash_map::RandomState],
 //! just like the standard `HashMap` and `HashSet`, which is resistant to
 //! HashDoS attacks but not the most performant. Type aliases can make it easier
 //! to use alternate hashers:
@@ -76,7 +79,7 @@
 //!
 //! ### Rust Version
 //!
-//! This version of indexmap requires Rust 1.85 or later.
+//! This version of indexmap requires Rust 1.63 or later.
 //!
 //! The indexmap 2.x release series will use a carefully considered version
 //! upgrade policy, where in a later 2.x version, we will raise the minimum
@@ -106,7 +109,6 @@ extern crate alloc;
 extern crate std;
 
 mod arbitrary;
-mod inner;
 #[macro_use]
 mod macros;
 #[cfg(feature = "borsh")]
@@ -172,13 +174,13 @@ where
 
 impl<K, V> Bucket<K, V> {
     // field accessors -- used for `f` instead of closures in `.map(f)`
-    const fn key_ref(&self) -> &K {
+    fn key_ref(&self) -> &K {
         &self.key
     }
-    const fn value_ref(&self) -> &V {
+    fn value_ref(&self) -> &V {
         &self.value
     }
-    const fn value_mut(&mut self) -> &mut V {
+    fn value_mut(&mut self) -> &mut V {
         &mut self.value
     }
     fn key(self) -> K {
@@ -190,13 +192,13 @@ impl<K, V> Bucket<K, V> {
     fn key_value(self) -> (K, V) {
         (self.key, self.value)
     }
-    const fn refs(&self) -> (&K, &V) {
+    fn refs(&self) -> (&K, &V) {
         (&self.key, &self.value)
     }
-    const fn ref_mut(&mut self) -> (&K, &mut V) {
+    fn ref_mut(&mut self) -> (&K, &mut V) {
         (&self.key, &mut self.value)
     }
-    const fn muts(&mut self) -> (&mut K, &mut V) {
+    fn muts(&mut self) -> (&mut K, &mut V) {
         (&mut self.key, &mut self.value)
     }
 }
@@ -253,7 +255,9 @@ impl core::fmt::Display for TryReserveError {
     }
 }
 
-impl core::error::Error for TryReserveError {}
+#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+impl std::error::Error for TryReserveError {}
 
 // NOTE: This is copied from the slice module in the std lib.
 /// The error type returned by [`get_disjoint_indices_mut`][`IndexMap::get_disjoint_indices_mut`].
@@ -281,4 +285,6 @@ impl core::fmt::Display for GetDisjointMutError {
     }
 }
 
-impl core::error::Error for GetDisjointMutError {}
+#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+impl std::error::Error for GetDisjointMutError {}

@@ -7,13 +7,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::ffi::c_void;
 use std;
 use std::fmt;
 use std::marker::PhantomData;
 use std::mem;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
+use std::os::raw::c_void;
 
 pub use core_foundation_sys::base::*;
 
@@ -29,7 +29,8 @@ pub trait CFIndexConvertible {
 impl CFIndexConvertible for usize {
     #[inline]
     fn to_CFIndex(self) -> CFIndex {
-        if self > (CFIndex::MAX as usize) {
+        let max_CFIndex = CFIndex::max_value();
+        if self > (max_CFIndex as usize) {
             panic!("value out of range")
         }
         self as CFIndex
@@ -253,7 +254,7 @@ impl TCFType for CFType {
 /// A reference to an element inside a container
 pub struct ItemRef<'a, T: 'a>(ManuallyDrop<T>, PhantomData<&'a T>);
 
-impl<T> Deref for ItemRef<'_, T> {
+impl<'a, T> Deref for ItemRef<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -261,13 +262,13 @@ impl<T> Deref for ItemRef<'_, T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for ItemRef<'_, T> {
+impl<'a, T: fmt::Debug> fmt::Debug for ItemRef<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         self.0.fmt(f)
     }
 }
 
-impl<T: PartialEq> PartialEq for ItemRef<'_, T> {
+impl<'a, T: PartialEq> PartialEq for ItemRef<'a, T> {
     fn eq(&self, other: &Self) -> bool {
         self.0.eq(&other.0)
     }
@@ -276,7 +277,7 @@ impl<T: PartialEq> PartialEq for ItemRef<'_, T> {
 /// A reference to a mutable element inside a container
 pub struct ItemMutRef<'a, T: 'a>(ManuallyDrop<T>, PhantomData<&'a T>);
 
-impl<T> Deref for ItemMutRef<'_, T> {
+impl<'a, T> Deref for ItemMutRef<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -284,19 +285,19 @@ impl<T> Deref for ItemMutRef<'_, T> {
     }
 }
 
-impl<T> DerefMut for ItemMutRef<'_, T> {
+impl<'a, T> DerefMut for ItemMutRef<'a, T> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.0
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for ItemMutRef<'_, T> {
+impl<'a, T: fmt::Debug> fmt::Debug for ItemMutRef<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         self.0.fmt(f)
     }
 }
 
-impl<T: PartialEq> PartialEq for ItemMutRef<'_, T> {
+impl<'a, T: PartialEq> PartialEq for ItemMutRef<'a, T> {
     fn eq(&self, other: &Self) -> bool {
         self.0.eq(&other.0)
     }
@@ -371,20 +372,20 @@ unsafe impl ToVoid<*const c_void> for *const c_void {
     }
 }
 
-unsafe impl ToVoid<CFType> for &CFType {
-    fn to_void(&self) -> *const c_void {
+unsafe impl<'a> ToVoid<CFType> for &'a CFType {
+    fn to_void(&self) -> *const ::std::os::raw::c_void {
         self.as_concrete_TypeRef().as_void_ptr()
     }
 }
 
 unsafe impl ToVoid<CFType> for CFType {
-    fn to_void(&self) -> *const c_void {
+    fn to_void(&self) -> *const ::std::os::raw::c_void {
         self.as_concrete_TypeRef().as_void_ptr()
     }
 }
 
 unsafe impl ToVoid<CFType> for CFTypeRef {
-    fn to_void(&self) -> *const c_void {
+    fn to_void(&self) -> *const ::std::os::raw::c_void {
         self.as_void_ptr()
     }
 }
