@@ -34,10 +34,39 @@ if ! grep -q 'vendored-sources\|replace-with' .cargo/config.toml; then
   exit 1
 fi
 
+# dpkg-source excludes *.orig by default when packing native/recipe sources.
+# Cargo vendor checksums list Cargo.toml.orig, so strip those entries or the
+# Launchpad build fails with "failed to calculate checksum of ... Cargo.toml.orig".
+echo "Pruning Cargo.toml.orig from vendor (dpkg-source incompatible)..."
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+vendor = Path("vendor")
+for checksum_path in vendor.glob("*/.cargo-checksum.json"):
+    data = json.loads(checksum_path.read_text())
+    files = data.get("files", {})
+    changed = False
+    for name in list(files):
+        if name == "Cargo.toml.orig" or name.endswith(".orig"):
+            del files[name]
+            changed = True
+            p = checksum_path.parent / name
+            if p.exists():
+                p.unlink()
+    for p in checksum_path.parent.glob("*.orig"):
+        p.unlink()
+        changed = True
+    if changed:
+        checksum_path.write_text(
+            json.dumps(data, separators=(",", ":"), sort_keys=True) + "\n"
+        )
+PY
+
 echo "Checking offline build wiring..."
 CARGO_HOME="${root}/debian/cargo_home" cargo fetch --locked --offline 2>/dev/null || true
 
 echo "Ready."
 echo "  vendor/ and .cargo/config.toml are in place (gitignored locally;"
 echo "  they must be present in the source package / recipe tree)."
-echo "  Next: ./packaging/build-ppa-source.sh jammy"
+echo "  Commit vendor/ + .cargo/config.toml, then: git push launchpad main"

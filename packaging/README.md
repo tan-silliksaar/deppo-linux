@@ -38,7 +38,7 @@ Repeat for other series (same upstream, new changelog distribution via the scrip
 ./packaging/build-ppa-source.sh resolute
 ```
 
-`prepare-ppa.sh` runs `cargo vendor`, writes `.cargo/config.toml` for offline builds, and checks that `Cargo.lock` is present.
+`prepare-ppa.sh` runs `cargo vendor`, writes `.cargo/config.toml` for offline builds, and strips `Cargo.toml.orig` from `vendor/` (dpkg-source drops `*.orig` when packing, which would break cargo checksums on Launchpad).
 
 ## Recipe text (optional)
 
