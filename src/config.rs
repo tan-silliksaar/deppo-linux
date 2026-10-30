@@ -73,12 +73,20 @@ pub fn home_dir() -> PathBuf {
 }
 
 pub fn runtime_dir() -> PathBuf {
+    // Always prefer /run/user/<uid> when it exists so every launch (systemd,
+    // desktop, IDE, conda) shares one single-instance lock. Honoring a custom
+    // XDG_RUNTIME_DIR first allowed a second deppo under /tmp/deppo-<uid>.
+    let uid = users_uid();
+    let run_user = PathBuf::from(format!("/run/user/{uid}"));
+    if run_user.is_dir() {
+        return run_user;
+    }
     if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }
     }
-    std::env::temp_dir().join(format!("deppo-{}", users_uid()))
+    std::env::temp_dir().join(format!("deppo-{uid}"))
 }
 
 fn users_uid() -> u32 {

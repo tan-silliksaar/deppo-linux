@@ -1,3 +1,11 @@
+deppo (1.0.7-1) jammy; urgency=medium
+
+  * Version 1.0.7.
+  * Keep a single instance even when XDG_RUNTIME_DIR is unset.
+  * deppo -u opens the browser and exits.
+
+ -- Deppo <info@deppo.eu>  Fri, 30 Oct 2026 06:06:55 +0000
+
 deppo (1.0.6-2) jammy; urgency=medium
 
   * Target Ubuntu 22.04 LTS (jammy) and newer.

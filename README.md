@@ -2,7 +2,7 @@
 
 Linux client for [Deppo](https://www.deppo.eu) storage. The binary is named `deppo`.
 
-Version 1.0.6. Apache License 2.0.
+Version 1.0.7. Apache License 2.0.
 
 ## Status
 

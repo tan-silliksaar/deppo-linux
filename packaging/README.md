@@ -28,7 +28,7 @@ From the repository root (clean working tree, matching `Cargo.toml` version):
 ```bash
 ./packaging/prepare-ppa.sh
 ./packaging/build-ppa-source.sh jammy
-dput ppa:deppo/deppo ../deppo_1.0.6-2_source.changes
+dput ppa:deppo/deppo ../deppo_1.0.7-1_source.changes
 ```
 
 Repeat for other series (same upstream, new changelog distribution via the script):

@@ -31,7 +31,7 @@ fn print_help() {
         "deppo {} — Linux client for Deppo storage.\n\n\
          Usage:\n\
            deppo                     Keep running (mounts, backups)\n\
-           deppo --ui | -u           Open the local page in a browser\n\
+           deppo --ui | -u           Open the local page, then exit\n\
            deppo subscription add <server> <subscription:password>\n\
            deppo subscription list\n\
            deppo subscription remove <server> <subscription>\n\

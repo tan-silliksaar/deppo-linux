@@ -5,11 +5,13 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::os::unix::io::AsRawFd;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::config::{self, Subscription};
 use crate::drive;
@@ -52,13 +54,20 @@ fn try_acquire() -> Result<Option<HostLock>> {
     let dir = config::runtime_dir();
     fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
     let path = lock_path();
-    let file = OpenOptions::new().create(true).read(true).write(true).open(&path).with_context(|| format!("open {}", path.display()))?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("open {}", path.display()))?;
     let ok = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-    if ok == 0 {
-        Ok(Some(HostLock { _file: file }))
-    } else {
-        Ok(None)
+    if ok != 0 {
+        return Ok(None);
     }
+    let _ = file.set_len(0);
+    let _ = writeln!(file, "{}", std::process::id());
+    let _ = file.flush();
+    Ok(Some(HostLock { _file: file }))
 }
 
 fn publish_port(port: u16) -> Result<()> {
@@ -82,18 +91,15 @@ fn wait_for_port() -> Option<u16> {
 }
 
 /// Stay running until the process is stopped. Another launch without `--ui`
-/// prints a message and returns. Another launch with `--ui` opens the browser.
+/// prints a message and returns. `--ui` opens the browser and always returns:
+/// if nothing is running yet, a background `deppo` is started first.
 pub fn run_resident(open_ui: bool) -> Result<()> {
+    if open_ui {
+        return open_ui_and_exit();
+    }
+
     let Some(_lock) = try_acquire()? else {
-        if open_ui {
-            if let Some(port) = wait_for_port() {
-                ui::open_browser(&format!("http://127.0.0.1:{port}/"));
-            } else {
-                println!("Deppo is already running.");
-            }
-        } else {
-            println!("Deppo is already running.");
-        }
+        println!("Deppo is already running.");
         return Ok(());
     };
 
@@ -103,7 +109,6 @@ pub fn run_resident(open_ui: bool) -> Result<()> {
     });
 
     let mut page: Option<u16> = None;
-    let mut showed_page = !open_ui;
     let mut mounted = Vec::new();
     let mut reported = Vec::new();
     let mut clocks = Vec::new();
@@ -130,14 +135,6 @@ pub fn run_resident(open_ui: bool) -> Result<()> {
             refresh_mounts(&mut mounted, &mut reported);
             run_due_backups(&mut clocks);
         }));
-        if open_ui && !showed_page {
-            if let Some(port) = page {
-                let url = format!("http://127.0.0.1:{port}/");
-                println!("{url}");
-                ui::open_browser(&url);
-                showed_page = true;
-            }
-        }
         if STOP.load(Ordering::SeqCst) {
             drive::unmount_all();
             return Ok(());
@@ -149,6 +146,39 @@ pub fn run_resident(open_ui: bool) -> Result<()> {
             Duration::from_secs(30)
         });
     }
+}
+
+fn open_ui_and_exit() -> Result<()> {
+    if try_acquire()?.is_none() {
+        return open_published_page();
+    }
+    // Nobody was running. Drop the trial lock (RAII) and start one resident.
+    let exe = std::env::current_exe().context("current executable")?;
+    let mut command = Command::new(&exe);
+    command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    // Detach so the child is not tied to this terminal and is the sole host.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    command
+        .spawn()
+        .with_context(|| format!("start background {}", exe.display()))?;
+    open_published_page()
+}
+
+fn open_published_page() -> Result<()> {
+    let Some(port) = wait_for_port() else {
+        bail!("Deppo did not publish a local page in time");
+    };
+    let url = format!("http://127.0.0.1:{port}/");
+    println!("{url}");
+    ui::open_browser(&url);
+    Ok(())
 }
 struct Clock {
     id: String,
