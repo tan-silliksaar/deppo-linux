@@ -461,6 +461,9 @@ pub fn backup_due(timer: BackupTimer, elapsed_secs: u64, anchor_date: &str, anch
 
 /// Install and enable a systemd --user unit so Deppo starts at login.
 pub fn ensure_startup() -> Result<()> {
+    if cfg!(debug_assertions) {
+        bail!("login startup is only available in release builds (cargo build --release)");
+    }
     let packaged = PathBuf::from("/usr/lib/systemd/user/deppo.service");
     if !packaged.is_file() {
         let exe = std::env::current_exe().context("find deppo")?;
@@ -525,6 +528,10 @@ fn systemctl_user(args: &[&str]) -> Result<std::process::Output> {
 }
 
 pub fn startup_enabled() -> bool {
+    // Debug builds never install a user service; hide the UI prompt.
+    if cfg!(debug_assertions) {
+        return true;
+    }
     let wants = home_dir().join(".config/systemd/user/default.target.wants/deppo.service");
     if wants.is_symlink() || wants.is_file() {
         return true;

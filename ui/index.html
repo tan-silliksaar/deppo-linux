@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Deppo</title>
+    <title>Deppo storage client for Ubuntu</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/style.css">
 </head>
@@ -15,27 +15,18 @@
             <path class="arc" d="M41.11.06c-7.77.1-12.96 1.43-20.2 5.56A40.4 40.4 0 0 0 5.6 20.9C1.88 27.4 0 34.76 0 43.1c0 8.23 1.86 15.59 5.57 22.07a40.4 40.4 0 0 0 15.31 15.29c9.1 5.2 16.62 5.7 20.35 5.51a2.92 2.92 0 0 0 2.07-.76c.57-.56.85-1.3.85-2.22 0-.86-.28-1.55-.85-2.06a2.82 2.82 0 0 0-2.18-.84c-6.75-.1-10.94-1.33-16.87-4.76a35.79 35.79 0 0 1-13.22-13.17c-3.14-5.58-4.7-11.93-4.7-19.05 0-7.12 1.6-13.43 4.73-19a35.4 35.4 0 0 1 13.22-13.35c3.38-1.96 8.5-4.84 16.83-4.82.94 0 1.67-.25 2.19-.76.57-.56.85-1.3.85-2.22 0-.86-.29-1.54-.85-2.06A3.2 3.2 0 0 0 41.1.06zM269.36.06c7.78.1 12.97 1.43 20.2 5.56a40.4 40.4 0 0 1 15.32 15.28c3.71 6.49 5.6 13.86 5.6 22.2 0 8.23-1.86 15.59-5.57 22.07a40.4 40.4 0 0 1-15.32 15.29c-9.11 5.2-16.62 5.7-20.36 5.51a2.92 2.92 0 0 1-2.06-.76 2.96 2.96 0 0 1-.86-2.22c0-.86.29-1.55.86-2.06a2.82 2.82 0 0 1 2.18-.84c6.74-.1 10.94-1.33 16.87-4.76 5.55-3.2 9.96-7.6 13.22-13.17 3.13-5.58 4.7-11.93 4.7-19.05 0-7.12-1.6-13.43-4.73-19a35.4 35.4 0 0 0-13.22-13.35c-3.38-1.96-8.51-4.84-16.84-4.82-.94 0-1.66-.25-2.18-.76a2.96 2.96 0 0 1-.86-2.22c0-.86.3-1.54.86-2.06a3.2 3.2 0 0 1 2.18-.84z" />
         </svg>
         </a>
-        <p class="kicker">Subscriptions</p>
-        <p class="version">1.0.7</p>
+        <h1 class="product">Deppo storage client for Ubuntu</h1>
+        <p class="version" id="version"></p>
     </header>
-    <section class="card" id="add-sub">
-        <h2>Add a subscription</h2>
-        <p id="empty-hint" class="hint" hidden>No subscriptions yet. Deppo checks these credentials with the server before saving them.</p>
-        <form id="add-sub-form">
-            <label for="server">Server</label>
-            <input id="server" name="server" autocomplete="off" spellcheck="false" placeholder="h1">
-            <label for="credentials">Credentials</label>
-            <input id="credentials" name="credentials" autocomplete="off" spellcheck="false" placeholder="12345678:password">
-            <button type="submit">Add</button>
-        </form>
-        <p id="add-sub-error" class="error" role="alert"></p>
-    </section>
-    <section id="startup" class="card startup-off" hidden>
-        <p>Deppo is not set to start at login. Automatic backups need the background service.</p>
+
+    <div id="startup" class="card warn" hidden>
+        <p>Deppo is not set to start at login. Automatic backups and drive mounts need the background service.</p>
         <button id="startup-enable" type="button">Start Deppo at login</button>
         <p id="startup-error" class="error" role="alert"></p>
-    </section>
-    <main id="subs"></main>
+    </div>
+
+    <main id="screen" class="card" aria-live="polite"></main>
+    <p id="page-error" class="error" role="alert"></p>
     <script src="/script.js"></script>
 </body>
 </html>

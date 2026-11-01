@@ -9,7 +9,7 @@ use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
@@ -34,8 +34,24 @@ pub fn log_error(message: &str) {
 }
 
 fn local_stamp() -> String {
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    format!("{secs}")
+    unsafe {
+        let mut now = 0;
+        libc::time(&mut now);
+        let tm = libc::localtime(&now);
+        if tm.is_null() {
+            return "1970-01-01 00:00:00".into();
+        }
+        let tm = *tm;
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            tm.tm_year + 1900,
+            tm.tm_mon + 1,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec
+        )
+    }
 }
 
 struct HostLock {
@@ -80,10 +96,20 @@ fn read_port() -> Option<u16> {
     text.trim().parse().ok()
 }
 
+fn port_is_live(port: u16) -> bool {
+    std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        Duration::from_millis(200),
+    )
+    .is_ok()
+}
+
 fn wait_for_port() -> Option<u16> {
     for _ in 0..50 {
         if let Some(port) = read_port() {
-            return Some(port);
+            if port_is_live(port) {
+                return Some(port);
+            }
         }
         std::thread::sleep(Duration::from_millis(100));
     }
@@ -91,17 +117,35 @@ fn wait_for_port() -> Option<u16> {
 }
 
 /// Stay running until the process is stopped. Another launch without `--ui`
-/// prints a message and returns. `--ui` opens the browser and always returns:
-/// if nothing is running yet, a background `deppo` is started first.
+/// prints a message and returns.
+///
+/// Release builds: `--ui` starts a detached background host (if needed) and exits.
+/// Debug builds: `--ui` stays in this terminal so logs are visible while developing.
 pub fn run_resident(open_ui: bool) -> Result<()> {
-    if open_ui {
+    if open_ui && !cfg!(debug_assertions) {
         return open_ui_and_exit();
     }
 
     let Some(_lock) = try_acquire()? else {
+        if open_ui {
+            return open_published_page();
+        }
         println!("Deppo is already running.");
         return Ok(());
     };
+
+    if open_ui {
+        let _ = fs::remove_file(port_path());
+        std::thread::spawn(|| {
+            if let Some(port) = wait_for_port() {
+                let url = format!("http://127.0.0.1:{port}/");
+                println!("{url}");
+                ui::open_browser(&url);
+            } else {
+                eprintln!("deppo: local page did not become ready in time");
+            }
+        });
+    }
 
     let _ = ctrlc::set_handler(|| {
         STOP.store(true, Ordering::SeqCst);
@@ -114,8 +158,7 @@ pub fn run_resident(open_ui: bool) -> Result<()> {
     let mut clocks = Vec::new();
     loop {
         if STOP.load(Ordering::SeqCst) {
-            drive::unmount_all();
-            return Ok(());
+            break;
         }
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             if page.is_none() {
@@ -136,15 +179,32 @@ pub fn run_resident(open_ui: bool) -> Result<()> {
             run_due_backups(&mut clocks);
         }));
         if STOP.load(Ordering::SeqCst) {
-            drive::unmount_all();
-            return Ok(());
+            break;
         }
         let wake = WAKE.swap(false, Ordering::SeqCst);
-        std::thread::sleep(if page.is_none() || wake {
+        let wait = if page.is_none() || wake {
             Duration::from_secs(1)
         } else {
             Duration::from_secs(30)
-        });
+        };
+        // Sleep in short slices so Ctrl+C (STOP) is noticed immediately.
+        wait_interruptible(wait);
+    }
+    eprintln!("deppo: stopping");
+    drive::unmount_all();
+    let _ = fs::remove_file(port_path());
+    Ok(())
+}
+
+fn wait_interruptible(total: Duration) {
+    let step = Duration::from_millis(100);
+    let deadline = Instant::now() + total;
+    while Instant::now() < deadline {
+        if STOP.load(Ordering::SeqCst) || WAKE.load(Ordering::SeqCst) {
+            return;
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        std::thread::sleep(remaining.min(step));
     }
 }
 
@@ -153,6 +213,8 @@ fn open_ui_and_exit() -> Result<()> {
         return open_published_page();
     }
     // Nobody was running. Drop the trial lock (RAII) and start one resident.
+    // Clear any stale port from a previous killed process so we do not open a dead URL.
+    let _ = fs::remove_file(port_path());
     let exe = std::env::current_exe().context("current executable")?;
     let mut command = Command::new(&exe);
     command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
@@ -228,8 +290,14 @@ fn run_due_backups(clocks: &mut Vec<Clock>) {
             clock.last_interval = None;
             clock.last_day.clear();
         }
+        // Interval backups run once when Deppo starts (or when the timer is first
+        // set), then every N minutes from that run. Daily backups still wait for
+        // the clock time.
+        let first_interval = matches!(timer, config::BackupTimer::Minutes(_)) && clock.last_interval.is_none();
         let elapsed = clock.last_interval.unwrap_or(clock.anchor).elapsed().as_secs();
-        if !config::backup_due(timer, elapsed, &clock.anchor_date, clock.anchor_minute, &clock.last_day, &today, now_minute) {
+        if !first_interval
+            && !config::backup_due(timer, elapsed, &clock.anchor_date, clock.anchor_minute, &clock.last_day, &today, now_minute)
+        {
             continue;
         }
         match timer {

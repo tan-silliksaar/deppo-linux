@@ -31,7 +31,7 @@ fn print_help() {
         "deppo {} — Linux client for Deppo storage.\n\n\
          Usage:\n\
            deppo                     Keep running (mounts, backups)\n\
-           deppo --ui | -u           Open the local page, then exit\n\
+           deppo --ui | -u           Open the local page (release: background; debug: stay in this terminal)\n\
            deppo subscription add <server> <subscription:password>\n\
            deppo subscription list\n\
            deppo subscription remove <server> <subscription>\n\
@@ -394,8 +394,27 @@ fn open_run_log() -> Result<fs::File> {
 }
 
 fn append_conclusion(log: &mut fs::File, line: &str) -> Result<()> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    writeln!(log, "{secs} {line}").context("write deppo.log")?;
+    writeln!(log, "{} {line}", local_timestamp()).context("write deppo.log")?;
     log.flush().context("write deppo.log")
+}
+
+fn local_timestamp() -> String {
+    unsafe {
+        let mut now = 0;
+        libc::time(&mut now);
+        let tm = libc::localtime(&now);
+        if tm.is_null() {
+            return "1970-01-01 00:00:00".into();
+        }
+        let tm = *tm;
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            tm.tm_year + 1900,
+            tm.tm_mon + 1,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec
+        )
+    }
 }

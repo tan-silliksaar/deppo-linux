@@ -288,10 +288,42 @@ fn apply_done(cache: &mut Cache, stats: &mut FolderStats, done: Done) -> Result<
 fn ignore_matcher(folder: &Path) -> Result<ignore::gitignore::Gitignore> {
     let path = folder.join(".deppoignore");
     let mut builder = ignore::gitignore::GitignoreBuilder::new(folder);
-    if let Some(err) = builder.add(&path) {
-        return Err(anyhow!(err)).with_context(|| format!("read {}", path.display()));
+    if path.is_file() {
+        if let Some(err) = builder.add(&path) {
+            return Err(anyhow!(err)).with_context(|| format!("read {}", path.display()));
+        }
     }
     builder.build().with_context(|| format!("parse {}", path.display()))
+}
+
+/// Count files and bytes that a backup of `folder` would consider, applying `.deppoignore`.
+pub fn measure_folder(folder: &Path) -> Result<(u64, u64)> {
+    let matcher = ignore_matcher(folder)?;
+    let mut walker = ignore::WalkBuilder::new(folder);
+    walker
+        .standard_filters(false)
+        .hidden(false)
+        .parents(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .follow_links(false)
+        .filter_entry(move |entry| {
+            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
+            !matcher.matched(entry.path(), is_dir).is_ignore()
+        });
+    let mut files = 0u64;
+    let mut bytes = 0u64;
+    for entry in walker.build() {
+        let entry = entry.with_context(|| format!("walk {}", folder.display()))?;
+        if !entry.file_type().map(|kind| kind.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let meta = entry.metadata().with_context(|| format!("stat {}", entry.path().display()))?;
+        files = files.saturating_add(1);
+        bytes = bytes.saturating_add(meta.len());
+    }
+    Ok((files, bytes))
 }
 
 fn worker(
@@ -609,26 +641,6 @@ fn connect(server: &Url) -> Result<BufReader<Box<dyn Io + Send>>> {
     finish_connect(server, host, tcp)
 }
 
-fn connect_within(server: &Url, timeout: Duration) -> Result<BufReader<Box<dyn Io + Send>>> {
-    use std::net::ToSocketAddrs;
-    let host = server.host_str().context("server has no host")?;
-    let port = server.port_or_known_default().context("server has no port")?;
-    let mut last_err = None;
-    for addr in (host, port).to_socket_addrs().with_context(|| format!("resolve {host}"))? {
-        match TcpStream::connect_timeout(&addr, timeout) {
-            Ok(tcp) => {
-                prepare_tcp(&tcp, timeout);
-                return finish_connect(server, host, tcp);
-            }
-            Err(err) => last_err = Some(err),
-        }
-    }
-    match last_err {
-        Some(err) => Err(err).with_context(|| format!("connect {host}:{port}")),
-        None => bail!("connect {host}:{port}"),
-    }
-}
-
 fn prepare_tcp(tcp: &TcpStream, timeout: Duration) {
     tcp.set_nodelay(true).ok();
     tcp.set_read_timeout(Some(timeout)).ok();
@@ -666,54 +678,6 @@ pub fn check_credentials(server: &Url, user: &str, password: &str) -> Result<()>
         401 | 403 => bail!("That subscription number or password was not accepted."),
         status => bail!("Could not reach the server (HTTP {status})."),
     }
-}
-
-pub fn get_bytes(url: &Url, max_body: usize) -> Result<Vec<u8>> {
-    let host = host_header(url);
-    let target = request_path(url);
-    let mut conn = connect_within(url, Duration::from_secs(20))?;
-    {
-        let sock = conn.get_mut();
-        write!(sock, "GET {target} HTTP/1.1\r\n")?;
-        write!(sock, "Host: {host}\r\n")?;
-        write!(sock, "User-Agent: deppo/0.1\r\n")?;
-        write!(sock, "Connection: close\r\n\r\n")?;
-        sock.flush()?;
-    }
-    let response = read_response(&mut conn)?;
-    if response.status != 200 {
-        bail!("download failed ({})", response.status);
-    }
-    read_body_bytes(&mut conn, &response.headers, max_body)
-}
-
-fn request_path(url: &Url) -> String {
-    let mut target = if url.path().is_empty() { "/".to_string() } else { url.path().to_string() };
-    if let Some(query) = url.query() {
-        target.push('?');
-        target.push_str(query);
-    }
-    target
-}
-
-pub fn post_json(url: &Url, body: &[u8]) -> Result<HttpReply> {
-    let host = host_header(url);
-    let target = request_path(url);
-    let mut conn = connect_within(url, Duration::from_secs(5))?;
-    {
-        let sock = conn.get_mut();
-        write!(sock, "POST {target} HTTP/1.1\r\n")?;
-        write!(sock, "Host: {host}\r\n")?;
-        write!(sock, "Content-Type: application/json\r\n")?;
-        write!(sock, "Content-Length: {}\r\n", body.len())?;
-        write!(sock, "User-Agent: deppo/0.1\r\n")?;
-        write!(sock, "Connection: close\r\n\r\n")?;
-        sock.write_all(body)?;
-        sock.flush()?;
-    }
-    let response = read_response(&mut conn)?;
-    let bytes = read_body_bytes(&mut conn, &response.headers, 64 * 1024)?;
-    Ok(HttpReply { status: response.status, body: bytes })
 }
 
 pub fn http_exchange(server: &Url, user: &str, password: &str, method: &str, target: &str, extra: &[(&str, &str)], body: &[u8], max_body: usize) -> Result<HttpReply> {

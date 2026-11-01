@@ -1,64 +1,33 @@
 const events = new EventSource("/events");
 events.addEventListener("ping", () => {});
 
-const subsEl = document.querySelector("#subs");
-const addForm = document.querySelector("#add-sub-form");
-const addError = document.querySelector("#add-sub-error");
-const emptyHint = document.querySelector("#empty-hint");
+const screenEl = document.querySelector("#screen");
+const pageError = document.querySelector("#page-error");
 const startupCard = document.querySelector("#startup");
 const startupError = document.querySelector("#startup-error");
-const logs = new Map();
+const versionEl = document.querySelector("#version");
+
+let page = { version: "", running: false, startupDisabled: false, subscriptions: [] };
+let current = null;
+let wizard = null;
+let logs = new Map();
 let shownRun = 0;
 let lastEvent = 0;
 let activeKey = "";
-let agoTimer = 0;
-let page = { winfsp: true, running: false, subscriptions: [] };
 
 function node(tag, className, text) {
-    const item = document.createElement(tag);
-    if (className) item.className = className;
-    if (text != null) item.textContent = text;
-    return item;
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text != null) el.textContent = text;
+    return el;
 }
 
 function keyOf(sub) {
     return `${sub.server}/${sub.user}`;
 }
 
-function unchangedCount(folder) {
-    return Number(folder.unchanged) + Number(folder.already);
-}
-
-function summaryText(folder) {
-    const parts = [];
-    if (folder.uploaded) parts.push(`uploaded ${folder.uploaded}`);
-    const unchanged = unchangedCount(folder);
-    if (unchanged) parts.push(`unchanged ${unchanged}`);
-    if (folder.failed) parts.push(`failed ${folder.failed}`);
-    if (parts.length) return parts.join(", ");
-    return folder.summary || "No finished backup yet.";
-}
-
-function chart(folder) {
-    const rows = [
-        ["Uploaded", folder.uploaded, "uploaded"],
-        ["Unchanged", unchangedCount(folder), "unchanged"],
-        ["Failed", folder.failed, "failed"],
-    ];
-    const max = Math.max(1, ...rows.map((row) => row[1]));
-    const wrap = node("div", "chart");
-    wrap.setAttribute("role", "img");
-    wrap.setAttribute("aria-label", rows.map((row) => `${row[0]} ${row[1]}`).join(", "));
-    for (const [label, value, kind] of rows) {
-        const row = node("div", "bar");
-        const track = node("span", "track");
-        const fill = node("span", `fill ${kind}`);
-        fill.style.width = `${Math.round((value / max) * 100)}%`;
-        track.append(fill);
-        row.append(node("span", "bar-label", label), track, node("span", "bar-n", String(value)));
-        wrap.append(row);
-    }
-    return wrap;
+function findSub(server, user) {
+    return page.subscriptions.find((sub) => sub.server === server && sub.user === user) || null;
 }
 
 async function readJson(response) {
@@ -67,507 +36,41 @@ async function readJson(response) {
     return body;
 }
 
-function ranAtDate(text) {
-    const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(text || "");
-    if (!match) return null;
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]));
+async function api(path, options) {
+    return readJson(await fetch(path, options));
 }
 
-function ago(date) {
-    const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-    if (seconds < 60) return unit(seconds, "second");
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return unit(minutes, "minute");
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return unit(hours, "hour");
-    return unit(Math.floor(hours / 24), "day");
-}
-
-function unit(count, name) {
-    return `${count} ${name}${count === 1 ? "" : "s"} ago`;
-}
-
-function paintWhen(element) {
-    const time = ranAtDate(element.dataset.ranAt);
-    element.textContent = time ? `${element.dataset.ranAt} · ${ago(time)}` : element.dataset.ranAt;
-}
-
-function rememberedText(folder) {
-    return folder.cached === 1 ? "1 file in the backup cache" : `${folder.cached} files in the backup cache`;
-}
-
-function fillStats(card, folder) {
-    card.querySelectorAll(":scope > .when, :scope > .chart, :scope > .summary, :scope > .cache").forEach((el) => el.remove());
-    const nodes = [];
-    if (folder.ranAt) {
-        const when = node("p", "when");
-        when.dataset.ranAt = folder.ranAt;
-        paintWhen(when);
-        nodes.push(when);
+function formatBytes(n) {
+    const value = Number(n) || 0;
+    if (value < 1000) return `${value} B`;
+    const units = ["KB", "MB", "GB", "TB"];
+    let x = value / 1000;
+    let i = 0;
+    while (x >= 1000 && i < units.length - 1) {
+        x /= 1000;
+        i += 1;
     }
-    nodes.push(chart(folder), node("p", "summary", summaryText(folder)), node("p", "cache", rememberedText(folder)));
-    const toggle = card.querySelector(".ignore-toggle");
-    if (toggle) toggle.before(...nodes);
-    else card.append(...nodes);
+    return `${x >= 10 ? x.toFixed(0) : x.toFixed(1)} ${units[i]}`;
 }
 
-function ignoreQuery(sub, path) {
-    return `server=${encodeURIComponent(sub.server)}&user=${encodeURIComponent(sub.user)}&path=${encodeURIComponent(path)}`;
-}
-
-function renderFolder(parent, sub, folder) {
-    const card = node("article", "card");
-    card.dataset.path = folder.path;
-    const head = node("div", "head");
-    head.append(node("h2", "", folder.path));
-    const remove = node("button", "quiet", "Remove");
-    remove.type = "button";
-    remove.addEventListener("click", () => removeFolder(sub, folder.path, card));
-    head.append(remove);
-    card.append(head);
-    fillStats(card, folder);
-
-    const toggle = node("button", "ignore-toggle", ".deppoignore");
-    toggle.type = "button";
-    toggle.setAttribute("aria-expanded", "false");
-    const editor = node("div", "ignore-editor");
-    editor.hidden = true;
-    const area = node("textarea");
-    area.spellcheck = false;
-    area.dataset.saved = "";
-    const actions = node("div", "ignore-actions");
-    const save = node("button", "", "Save ignore file");
-    save.type = "button";
-    const cancel = node("button", "quiet", "Cancel");
-    cancel.type = "button";
-    cancel.hidden = true;
-    const status = node("p", "saved", "");
-    const dirty = () => area.value !== area.dataset.saved;
-    const paintDirty = () => {
-        const changed = dirty();
-        cancel.hidden = !changed;
-        if (changed) editor.hidden = false;
-        toggle.setAttribute("aria-expanded", editor.hidden ? "false" : "true");
-        toggle.setAttribute("aria-disabled", changed ? "true" : "false");
-    };
-    toggle.addEventListener("click", () => {
-        if (dirty()) return;
-        editor.hidden = !editor.hidden;
-        paintDirty();
-    });
-    area.addEventListener("input", paintDirty);
-    const closeEditor = () => {
-        editor.hidden = true;
-        status.textContent = "";
-        paintDirty();
-    };
-    cancel.addEventListener("click", () => {
-        area.value = area.dataset.saved;
-        closeEditor();
-    });
-    save.addEventListener("click", async () => {
-        status.textContent = "";
-        status.className = "saved";
-        try {
-            await readJson(await fetch(`/api/ignore?${ignoreQuery(sub, folder.path)}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: area.value }),
-            }));
-            area.dataset.saved = area.value;
-            closeEditor();
-        } catch (err) {
-            status.className = "error";
-            status.textContent = err.message;
-        }
-    });
-    actions.append(save, cancel);
-    editor.append(area, actions, status);
-    card.append(toggle, editor);
-    parent.append(card);
-    fetch(`/api/ignore?${ignoreQuery(sub, folder.path)}`).then(readJson).then((body) => {
-        area.dataset.saved = body.text || "";
-        area.value = area.dataset.saved;
-        if (!body.exists) status.textContent = "This file is not on disk yet. Saving creates it.";
-        paintDirty();
-    }).catch((err) => {
-        status.className = "error";
-        status.textContent = err.message;
-    });
-}
-
-function timerControl(sub, error) {
-    const block = node("div", "timer");
-    block.append(node("h3", "", "Automatic backup"));
-    const modes = node("div", "timer-modes");
-    const group = `timer-${sub.server}-${sub.user}`;
-    const off = document.createElement("input");
-    const every = document.createElement("input");
-    const daily = document.createElement("input");
-    for (const input of [off, every, daily]) {
-        input.type = "radio";
-        input.name = group;
-    }
-    const interval = document.createElement("input");
-    interval.type = "text";
-    interval.className = "interval";
-    interval.spellcheck = false;
-    interval.autocomplete = "off";
-    interval.setAttribute("aria-label", "Backup interval");
-    interval.value = "6 hours";
-    const time = document.createElement("input");
-    time.type = "time";
-    time.value = "01:00";
-    const raw = sub.timer || "";
-    if (/^\d+$/.test(raw)) {
-        every.checked = true;
-        interval.value = formatInterval(Number(raw));
-    } else if (/^\d{1,2}:\d{2}$/.test(raw)) {
-        daily.checked = true;
-        const [hour, minute] = raw.split(":");
-        time.value = `${hour.padStart(2, "0")}:${minute}`;
-    } else {
-        off.checked = true;
-    }
-    interval.addEventListener("blur", () => {
-        const shown = normalizedInterval(interval.value);
-        if (shown) {
-            interval.value = shown;
-            if (every.checked) error.textContent = "";
-        }
-    });
-    const offLabel = node("label");
-    offLabel.append(off, document.createTextNode(" Off"));
-    const everyLabel = node("label");
-    everyLabel.append(every, document.createTextNode(" Every "), interval);
-    const dailyLabel = node("label");
-    dailyLabel.append(daily, document.createTextNode(" Every day at "), time);
-    modes.append(offLabel, everyLabel, dailyLabel);
-    const save = node("button", "", "Save automatic backup");
-    save.type = "button";
-    save.addEventListener("click", async () => {
-        error.textContent = "";
-        let timer = "";
-        if (every.checked) {
-            const shown = normalizedInterval(interval.value);
-            if (!shown) {
-                error.textContent = intervalError(interval.value);
-                return;
-            }
-            interval.value = shown;
-            timer = shown;
-        } else if (daily.checked) {
-            if (!time.value) {
-                error.textContent = "Choose a time, in 24-hour form, such as 01:00.";
-                return;
-            }
-            timer = time.value;
-        }
-        try {
-            await readJson(await fetch("/api/timer", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ server: sub.server, user: sub.user, timer }),
-            }));
-            await load();
-        } catch (err) {
-            error.textContent = err.message;
-        }
-    });
-    block.append(modes, node("p", "hint", "The interval is at most 24 hours, such as 6 hours, 90 minutes, 30s, or 1:30. A time such as 1:00 or 13:05 runs once a day, in 24-hour time, while Deppo is running."), save);
-    return block;
-}
-
-function normalizedInterval(raw) {
-    try {
-        return formatInterval(parseInterval(raw));
-    } catch {
-        return "";
-    }
-}
-
-function intervalError(raw) {
-    try {
-        parseInterval(raw);
-        return "";
-    } catch (err) {
-        return err.message;
-    }
-}
-
-function parseInterval(raw) {
+function timerLabel(raw) {
     const text = String(raw || "").trim();
-    const clock = /^(\d+)\s*:\s*(\d+)(?:\s*:\s*(\d+))?$/.exec(text);
-    if (clock) {
-        const hours = Number(clock[1]);
-        const mins = Number(clock[2]);
-        const secs = clock[3] == null ? 0 : Number(clock[3]);
-        return wholeMinutes(hours * 60 + mins + Math.round(secs / 60));
+    if (!text) return "Automatic backup is off.";
+    if (/^\d+$/.test(text)) {
+        const minutes = Number(text);
+        if (minutes % 60 === 0) return `Every ${minutes / 60} hours.`;
+        return `Every ${minutes} minutes.`;
     }
-    const match = /^(\d+(?:\.\d+)?)(?:\s*(.*))?$/.exec(text);
-    if (!match) return failInterval();
-    const value = Number(match[1]);
-    const rest = (match[2] || "").trim();
-    if (!rest) {
-        if (value >= 1 && value <= 24) return wholeMinutes(Math.round(value * 60));
-        if (value > 24 && value <= 1440) return wholeMinutes(Math.round(value));
-        return failInterval();
-    }
-    const unit = rest[0].toLowerCase();
-    if (unit === "h") return wholeMinutes(Math.round(value * 60));
-    if (unit === "m") return wholeMinutes(Math.round(value));
-    if (unit === "s") return wholeMinutes(Math.round(value / 60));
-    return failInterval();
+    if (/^\d{1,2}:\d{2}$/.test(text)) return `Every day at ${text}.`;
+    return text;
 }
-
-function wholeMinutes(minutes) {
-    if (!Number.isFinite(minutes) || minutes < 1) throw new Error("Automatic backup needs at least 1 minute.");
-    if (minutes > 1440) throw new Error("Automatic backup can run at most every 24 hours.");
-    return minutes;
-}
-
-function failInterval() {
-    throw new Error("Use 1 to 24 hours, or up to 1440 minutes. 6 hours, 90m, 30s, and 1:30 all work.");
-}
-
-function formatInterval(minutes) {
-    if (minutes % 60 === 0) return `${minutes / 60} hours`;
-    return `${minutes} minutes`;
-}
-
-function renderSub(sub) {
-    const card = node("section", "card");
-    card.dataset.key = keyOf(sub);
-    const head = node("div", "head");
-    const title = node("h2", "");
-    title.append(document.createTextNode(`${sub.server} · `));
-    const link = document.createElement("a");
-    link.href = `https://www.deppo.eu/#subscriptions?id=${encodeURIComponent(sub.user)}`;
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = sub.user;
-    title.append(link);
-    const remove = node("button", "quiet", "Remove");
-    remove.type = "button";
-    remove.addEventListener("click", () => removeSub(sub));
-    head.append(title, remove);
-    card.append(head);
-    if (!sub.password) card.append(node("p", "error", "The saved password could not be read. Add this subscription again."));
-
-        const driveError = node("p", "error", "");
-    const mountInput = document.createElement("input");
-    mountInput.className = "mount";
-    mountInput.spellcheck = false;
-    mountInput.autocomplete = "off";
-    mountInput.placeholder = "~/Deppo";
-    mountInput.value = sub.mount || "";
-    mountInput.ariaLabel = "Mount path";
-    const driveButton = node("button", "", sub.mount ? "Change mount" : "Set mount");
-    driveButton.type = "button";
-    driveButton.addEventListener("click", async () => {
-        driveError.textContent = "";
-        driveButton.disabled = true;
-        try {
-            await readJson(await fetch("/api/mount", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ server: sub.server, user: sub.user, mount: mountInput.value }),
-            }));
-            await load();
-        } catch (err) {
-            driveError.textContent = err.message;
-            driveButton.disabled = false;
-        }
-    });
-    const driveRow = node("div", "drive-row");
-    const driveLabel = node("label");
-    driveLabel.append(document.createTextNode("Mount path "), mountInput);
-    driveRow.append(driveLabel, driveButton);
-    card.append(driveRow, driveError);
-    if (sub.mount) card.append(node("p", "hint", `${sub.mount} stays available while Deppo is running in the background.`));
-
-    if (!page.startupDisabled) {
-        const timerError = node("p", "error", "");
-        card.append(timerControl(sub, timerError), timerError);
-    }
-
-    const backup = node("button", "backup", "Back up now");
-    backup.type = "button";
-    backup.disabled = page.running;
-    backup.addEventListener("click", () => backupNow(sub, card));
-    const log = node("div", "run-log");
-    log.hidden = true;
-    const saved = logs.get(keyOf(sub));
-    if (saved) {
-        log.hidden = false;
-        log.append(...saved.map((line) => node("div", line.bad ? "log-line bad" : "log-line", line.text)));
-    }
-    const runError = node("p", "error", "");
-    card.append(backup, log, runError);
-
-    const folders = node("div", "folders");
-    if (!sub.folders.length) folders.append(node("p", "hint", "No folders yet. Add one below."));
-    for (const folder of sub.folders) renderFolder(folders, sub, folder);
-    const form = node("form", "add");
-    const path = document.createElement("input");
-    path.placeholder = "~/Documents";
-    path.autocomplete = "off";
-    path.spellcheck = false;
-    path.setAttribute("aria-label", "Folder path");
-    const add = node("button", "", "Add");
-    add.type = "submit";
-    const row = node("div", "row");
-    row.append(path, add);
-    const folderError = node("p", "error", "");
-    form.append(node("h3", "", "Add a folder"), row, folderError);
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        folderError.textContent = "";
-        try {
-            await readJson(await fetch("/api/folders", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ server: sub.server, user: sub.user, path: path.value }),
-            }));
-            await load();
-        } catch (err) {
-            folderError.textContent = err.message;
-        }
-    });
-    card.append(folders, form);
-    return card;
-}
-
-async function removeFolder(sub, path, card) {
-    if (!confirm(`Remove ${path} from this subscription? The folder on disk stays.`)) return;
-    const error = card.querySelector(".error");
-    try {
-        await readJson(await fetch("/api/folders", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ server: sub.server, user: sub.user, path }),
-        }));
-        await load();
-    } catch (err) {
-        if (error) error.textContent = err.message;
-    }
-}
-
-async function removeSub(sub) {
-    if (!confirm(`Remove subscription ${sub.user} on ${sub.server}?`)) return;
-    addError.textContent = "";
-    try {
-        await readJson(await fetch("/api/subscriptions", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ server: sub.server, user: sub.user }),
-        }));
-        await load();
-    } catch (err) {
-        addError.textContent = err.message;
-    }
-}
-
-async function backupNow(sub, card) {
-    const error = card.querySelector(".run-log + .error") || card.querySelector(".error");
-    if (error) error.textContent = "";
-    activeKey = keyOf(sub);
-    setRunning(true);
-    try {
-        await readJson(await fetch("/api/backup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ server: sub.server, user: sub.user }),
-        }));
-    } catch (err) {
-        setRunning(false);
-        if (error) error.textContent = err.message;
-    }
-}
-
-function setRunning(running) {
-    page.running = running;
-    for (const button of document.querySelectorAll("button.backup")) {
-        button.disabled = running;
-        button.textContent = running ? "Backing up…" : "Back up now";
-    }
-}
-
-async function load() {
-    page = await readJson(await fetch("/api/info"));
-    startupCard.hidden = !page.startupDisabled;
-    emptyHint.hidden = page.subscriptions.length > 0;
-    clearInterval(agoTimer);
-    subsEl.replaceChildren(...page.subscriptions.map(renderSub));
-    agoTimer = setInterval(() => {
-        for (const when of document.querySelectorAll(".when")) paintWhen(when);
-    }, 1000);
-}
-
-function appendLog(row) {
-    if (row.id <= lastEvent) return;
-    lastEvent = row.id;
-    if (row.run !== shownRun) {
-        shownRun = row.run;
-        logs.set(activeKey, []);
-        const current = document.querySelector(`[data-key="${CSS.escape(activeKey)}"] .run-log`);
-        if (current) current.replaceChildren();
-        setRunning(true);
-    }
-    const bad = /^(fail |skip |deppo:)/.test(row.text);
-    const bucket = logs.get(activeKey) || [];
-    bucket.push({ text: row.text, bad });
-    while (bucket.length > 2000) bucket.shift();
-    logs.set(activeKey, bucket);
-    const log = document.querySelector(`[data-key="${CSS.escape(activeKey)}"] .run-log`);
-    if (!log) return;
-    log.hidden = false;
-    log.append(node("div", bad ? "log-line bad" : "log-line", row.text));
-    while (log.childElementCount > 2000) log.firstElementChild.remove();
-    log.scrollTop = log.scrollHeight;
-}
-
-events.addEventListener("log", (ev) => {
-    appendLog(JSON.parse(ev.data));
-});
-
-events.addEventListener("done", async (ev) => {
-    const row = JSON.parse(ev.data);
-    if (row.id <= lastEvent) return;
-    lastEvent = row.id;
-    setRunning(false);
-    try {
-        await load();
-    } catch (err) {
-        addError.textContent = err.message;
-    }
-});
-
-document.querySelector("#startup-enable").addEventListener("click", async () => {
-    startupError.textContent = "";
-    try {
-        await readJson(await fetch("/api/startup", { method: "POST" }));
-        await load();
-    } catch (err) {
-        startupError.textContent = err.message;
-    }
-});
-
-addForm.server.addEventListener("blur", () => {
-    const name = serverName(addForm.server.value);
-    if (name) addForm.server.value = name;
-});
 
 function serverName(raw) {
     const text = String(raw || "").trim();
     if (!text) return "";
     let host = text;
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
-        try {
-            host = new URL(text).hostname;
-        } catch {
-            return text;
-        }
+        try { host = new URL(text).hostname; } catch { return text; }
     } else {
         host = text.split("/")[0];
         const colon = host.lastIndexOf(":");
@@ -587,29 +90,813 @@ function credentialCombo(text) {
     return { user: match[1], password: match[2].trim() };
 }
 
-addForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    addError.textContent = "";
-    const server = serverName(addForm.server.value);
-    if (server) addForm.server.value = server;
-    const credentials = addForm.credentials.value.trim();
-    if (!credentialCombo(credentials)) {
-        addError.textContent = "Enter credentials as subscription:password.";
+function parseInterval(raw) {
+    const text = String(raw || "").trim();
+    const clock = /^(\d+)\s*:\s*(\d+)(?:\s*:\s*(\d+))?$/.exec(text);
+    if (clock) {
+        const hours = Number(clock[1]);
+        const mins = Number(clock[2]);
+        const secs = clock[3] == null ? 0 : Number(clock[3]);
+        return wholeMinutes(hours * 60 + mins + Math.round(secs / 60));
+    }
+    const match = /^(\d+(?:\.\d+)?)(?:\s*(.*))?$/.exec(text);
+    if (!match) throw new Error("Use 1 to 24 hours, or up to 1440 minutes. Examples: 6 hours, 90m.");
+    const value = Number(match[1]);
+    const rest = (match[2] || "").trim();
+    if (!rest) {
+        if (value >= 1 && value <= 24) return wholeMinutes(Math.round(value * 60));
+        if (value > 24 && value <= 1440) return wholeMinutes(Math.round(value));
+        throw new Error("Use 1 to 24 hours, or up to 1440 minutes.");
+    }
+    const unit = rest[0].toLowerCase();
+    if (unit === "h") return wholeMinutes(Math.round(value * 60));
+    if (unit === "m") return wholeMinutes(Math.round(value));
+    if (unit === "s") return wholeMinutes(Math.round(value / 60));
+    throw new Error("Use hours, minutes, or seconds, such as 6 hours or 90 minutes.");
+}
+
+function wholeMinutes(minutes) {
+    if (!Number.isFinite(minutes) || minutes < 1) throw new Error("Automatic backup needs at least 1 minute.");
+    if (minutes > 1440) throw new Error("Automatic backup can run at most every 24 hours.");
+    return minutes;
+}
+
+function formatInterval(minutes) {
+    if (minutes % 60 === 0) return `${minutes / 60} hours`;
+    return `${minutes} minutes`;
+}
+
+function clearScreen() {
+    screenEl.replaceChildren();
+    pageError.textContent = "";
+}
+
+function actionsBar(...items) {
+    const bar = node("div", "actions");
+    for (const item of items) {
+        if (!item) continue;
+        if (item === "spacer") bar.append(node("div", "spacer"));
+        else bar.append(item);
+    }
+    return bar;
+}
+
+function fillActions(bar, ...items) {
+    bar.replaceChildren();
+    for (const item of items) {
+        if (!item) continue;
+        if (item === "spacer") bar.append(node("div", "spacer"));
+        else bar.append(item);
+    }
+}
+
+function btn(label, className, onClick) {
+    const button = node("button", className || "", label);
+    button.type = "button";
+    if (onClick) button.addEventListener("click", onClick);
+    return button;
+}
+
+function textLink(label, onClick) {
+    const link = node("button", "text-link", label);
+    link.type = "button";
+    link.addEventListener("click", onClick);
+    return link;
+}
+
+function setError(el, message) {
+    if (el) el.textContent = message || "";
+}
+
+async function refreshInfo() {
+    page = await api("/api/info");
+    versionEl.textContent = page.version ? `Version ${page.version}` : "";
+    startupCard.hidden = !page.startupDisabled;
+    return page;
+}
+
+function goHome() {
+    wizard = null;
+    const subs = page.subscriptions || [];
+    if (!subs.length) {
+        showIntro({ firstRun: true });
         return;
     }
-    try {
-        await readJson(await fetch("/api/subscriptions", {
+    if (subs.length === 1) {
+        showOverview(subs[0], { showAdd: true });
+        return;
+    }
+    showSubscriptionList();
+}
+
+function startWizard() {
+    wizard = { server: "", user: "", mode: "setup" };
+    showIntro({ firstRun: !(page.subscriptions || []).length });
+}
+
+function showIntro({ firstRun }) {
+    current = "intro";
+    clearScreen();
+    screenEl.append(
+        node("h2", "", firstRun ? "Set up Deppo on this computer" : "Add another subscription"),
+        node(
+            "p",
+            "lead",
+            "This is the Deppo storage client for Ubuntu. It connects your computer to Deppo immutable storage.",
+        ),
+        node(
+            "p",
+            "copy",
+            "Next we will check your subscription credentials, optionally set up a drive mount so you can browse Deppo like a folder, and optionally set up automatic backup of folders on this computer.",
+        ),
+    );
+    const credsNote = node("p", "copy creds-note", "");
+    credsNote.append(
+        document.createTextNode("You will need the server name and credentials from your "),
+    );
+    const subsLink = document.createElement("a");
+    subsLink.className = "text-link";
+    subsLink.href = "https://www.deppo.eu/#subscriptions";
+    subsLink.target = "_blank";
+    subsLink.rel = "noopener";
+    subsLink.textContent = "My subscriptions";
+    credsNote.append(subsLink);
+    credsNote.append(document.createTextNode(" page on the Deppo website."));
+    screenEl.append(credsNote);
+    const next = btn("Next", "", () => showCredentials());
+    const back = firstRun ? null : btn("Back to start", "quiet", goHome);
+    screenEl.append(actionsBar(back, "spacer", next));
+}
+
+function showCredentials() {
+    current = "credentials";
+    clearScreen();
+    screenEl.append(
+        node("h2", "", "Subscription credentials"),
+        node("p", "copy", "Enter the Deppo server name and the subscription credentials you received when the subscription was created."),
+    );
+    const serverLabel = node("label", "", "Server");
+    serverLabel.htmlFor = "server";
+    const server = document.createElement("input");
+    server.id = "server";
+    server.autocomplete = "off";
+    server.spellcheck = false;
+    server.placeholder = "h1";
+    server.value = wizard?.server || "";
+    const credLabel = node("label", "", "Credentials");
+    credLabel.htmlFor = "credentials";
+    const credentials = document.createElement("input");
+    credentials.id = "credentials";
+    credentials.autocomplete = "off";
+    credentials.spellcheck = false;
+    credentials.placeholder = "12345678:password";
+    const error = node("p", "error", "");
+    server.addEventListener("blur", () => {
+        const name = serverName(server.value);
+        if (name) server.value = name;
+    });
+    const next = btn("Next", "", async () => {
+        setError(error, "");
+        const name = serverName(server.value);
+        if (name) server.value = name;
+        if (!name) {
+            setError(error, "Enter a server name, such as h1.");
+            return;
+        }
+        const combo = credentialCombo(credentials.value);
+        if (!combo) {
+            setError(error, "Enter credentials as subscription:password.");
+            return;
+        }
+        next.disabled = true;
+        try {
+            const saved = await api("/api/subscriptions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ server: name, credentials: credentials.value.trim() }),
+            });
+            wizard = { server: saved.server, user: saved.user, mode: "setup" };
+            await refreshInfo();
+            showMountAsk();
+        } catch (err) {
+            setError(error, err.message);
+            next.disabled = false;
+        }
+    });
+    screenEl.append(serverLabel, server, credLabel, credentials, error, actionsBar(btn("Back", "quiet", () => showIntro({ firstRun: !(page.subscriptions || []).length })), "spacer", next));
+    server.focus();
+}
+
+function showMountAsk({ editing = false } = {}) {
+    current = "mount";
+    const sub = findSub(wizard.server, wizard.user);
+    clearScreen();
+    screenEl.append(
+        node("h2", "", editing ? "Edit drive mount" : "Set up a drive mount?"),
+        node(
+            "p",
+            "copy",
+            "A drive mount makes this Deppo subscription available as a folder on Ubuntu. You can open, copy, and save files there while Deppo is running.",
+        ),
+    );
+    const pathLabel = node("label", "", "Mount path");
+    pathLabel.htmlFor = "mount-path";
+    const path = document.createElement("input");
+    path.id = "mount-path";
+    path.autocomplete = "off";
+    path.spellcheck = false;
+    path.placeholder = "~/Deppo";
+    path.value = sub?.mount || "";
+    const error = node("p", "error", "");
+    const next = btn(editing ? "Save" : "Next", "", async () => {
+        setError(error, "");
+        next.disabled = true;
+        try {
+            await api("/api/mount", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ server: wizard.server, user: wizard.user, mount: path.value }),
+            });
+            await refreshInfo();
+            if (editing) showOverview(findSub(wizard.server, wizard.user), overviewFlags());
+            else showBackupAsk();
+        } catch (err) {
+            setError(error, err.message);
+            next.disabled = false;
+        }
+    });
+    const skipOrBack = editing
+        ? btn("Cancel", "quiet", () => showOverview(findSub(wizard.server, wizard.user), overviewFlags()))
+        : btn("Skip", "quiet", () => showBackupAsk());
+    const back = editing ? null : btn("Back", "quiet", showCredentials);
+    screenEl.append(pathLabel, path, error, actionsBar(back, skipOrBack, "spacer", next));
+}
+
+function showBackupAsk({ editing = false } = {}) {
+    current = "backup-ask";
+    clearScreen();
+    screenEl.append(
+        node("h2", "", "Set up automatic backup?"),
+        node(
+            "p",
+            "copy",
+            "Automatic backup can copy folders from this computer to Deppo on a schedule you choose. You pick the folders, and you can use ignore rules so temporary or private files are left out.",
+        ),
+        node(
+            "p",
+            "copy",
+            "Only files that have changed are uploaded. The first backup of a large folder can take a long time; later runs are usually much faster.",
+        ),
+    );
+    const next = btn("Next", "", () => {
+        const sub = findSub(wizard.server, wizard.user);
+        if (sub?.folders?.length) showFolderList();
+        else showFolderAdd({ afterList: false });
+    });
+    const skip = btn("Skip", "quiet", async () => {
+        if (!editing) {
+            await api("/api/timer", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ server: wizard.server, user: wizard.user, timer: "" }),
+            }).catch(() => {});
+            await refreshInfo();
+        }
+        showOverview(findSub(wizard.server, wizard.user), overviewFlags());
+    });
+    const back = editing
+        ? btn("Cancel", "quiet", () => showOverview(findSub(wizard.server, wizard.user), overviewFlags()))
+        : btn("Back", "quiet", () => showMountAsk());
+    screenEl.append(actionsBar(back, skip, "spacer", next));
+}
+
+function showFolderAdd({ afterList = false, fromOverview = false } = {}) {
+    current = "folder-add";
+    clearScreen();
+    screenEl.append(
+        node("h2", "", "Add a backup folder"),
+        node("p", "copy", "Choose one folder on this computer to include in automatic backup."),
+    );
+    const pathLabel = node("label", "", "Folder path");
+    pathLabel.htmlFor = "folder-path";
+    const path = document.createElement("input");
+    path.id = "folder-path";
+    path.autocomplete = "off";
+    path.spellcheck = false;
+    path.placeholder = "~/Documents";
+    const error = node("p", "error", "");
+    const note = node("div", "");
+    const goBack = () => {
+        if (fromOverview) showOverview(findSub(wizard.server, wizard.user), overviewFlags());
+        else if (afterList) showFolderList();
+        else showBackupAsk();
+    };
+    const doneAdding = () => {
+        if (fromOverview) showOverview(findSub(wizard.server, wizard.user), overviewFlags());
+        else showFolderList();
+    };
+    const add = btn("Add folder", "", async () => {
+        setError(error, "");
+        note.replaceChildren();
+        add.disabled = true;
+        try {
+            const result = await api("/api/folders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ server: wizard.server, user: wizard.user, path: path.value }),
+            });
+            await refreshInfo();
+            path.value = "";
+            note.append(
+                node("p", "ok", `Added ${result.path} (${formatBytes(result.bytes)}, ${result.files} files after ignore rules).`),
+                node(
+                    "p",
+                    "copy",
+                    result.ignoreCreated
+                        ? "Deppo created a .deppoignore file in that folder. It uses the same rules as .gitignore and already includes common exclusions, so you usually do not need to edit it."
+                        : "This folder already had a .deppoignore file. It uses the same rules as .gitignore.",
+                ),
+            );
+            const ignoreLink = node("p", "copy", "");
+            ignoreLink.append(document.createTextNode("Ignore file: "));
+            ignoreLink.append(node("code", "", result.ignorePath));
+            note.append(ignoreLink);
+            fillActions(
+                foot,
+                btn("Add another folder", "primary-outline", () => showFolderAdd({ afterList, fromOverview })),
+                "spacer",
+                btn("Done adding folders", "", doneAdding),
+            );
+        } catch (err) {
+            setError(error, err.message);
+            add.disabled = false;
+        }
+    });
+    const foot = actionsBar(btn("Back", "quiet", goBack), "spacer", add);
+    screenEl.append(pathLabel, path, error, note, foot);
+    path.focus();
+}
+
+async function showFolderList() {
+    current = "folder-list";
+    clearScreen();
+    await refreshInfo();
+    const sub = findSub(wizard.server, wizard.user);
+    screenEl.append(
+        node("h2", "", "Backup folders"),
+        node("p", "copy", "These folders will be included. Hit Next to choose when automatic backup should run, or Skip to leave automatic backup off."),
+    );
+    const list = node("ul", "list");
+    const error = node("p", "error", "");
+    if (!sub?.folders?.length) {
+        list.append(node("li", "", "No folders yet."));
+    } else {
+        for (const folder of sub.folders) {
+            const item = node("li", "");
+            const title = node("div", "title", folder.path);
+            const meta = node("p", "meta", "Counting…");
+            const del = textLink("Delete", async () => {
+                if (!confirm(`Remove ${folder.path} from backup? The folder on disk stays.`)) return;
+                try {
+                    await api("/api/folders", {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ server: wizard.server, user: wizard.user, path: folder.path }),
+                    });
+                    await showFolderList();
+                } catch (err) {
+                    setError(error, err.message);
+                }
+            });
+            item.append(title, del, meta);
+            list.append(item);
+            api(`/api/folder-bytes?server=${encodeURIComponent(wizard.server)}&user=${encodeURIComponent(wizard.user)}&path=${encodeURIComponent(folder.path)}`)
+                .then((body) => {
+                    meta.textContent = `${formatBytes(body.bytes)} · ${body.files} files (after .deppoignore)`;
+                })
+                .catch(() => {
+                    meta.textContent = "Could not measure size.";
+                });
+        }
+    }
+    const next = btn("Next", "", async () => {
+        await refreshInfo();
+        const latest = findSub(wizard.server, wizard.user);
+        if (!latest?.folders?.length) {
+            showBackupAsk();
+            return;
+        }
+        showTimer();
+    });
+    const skip = btn("Skip", "quiet", async () => {
+        await api("/api/timer", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ server, credentials }),
+            body: JSON.stringify({ server: wizard.server, user: wizard.user, timer: "" }),
+        });
+        await refreshInfo();
+        showOverview(findSub(wizard.server, wizard.user), overviewFlags());
+    });
+    screenEl.append(
+        list,
+        error,
+        actionsBar(
+            btn("Back", "quiet", () => showFolderAdd({ afterList: true })),
+            btn("Add folder", "primary-outline", () => showFolderAdd({ afterList: true })),
+            skip,
+            "spacer",
+            next,
+        ),
+    );
+}
+
+function showTimer({ editing = false } = {}) {
+    current = "timer";
+    const sub = findSub(wizard.server, wizard.user);
+    clearScreen();
+    screenEl.append(
+        node("h2", "", editing ? "Edit automatic backup time" : "When should backup run?"),
+        node(
+            "p",
+            "copy",
+            "You have two options: back up after an interval, or back up at a certain time every day. Backup can run only while this computer is left on and Deppo is running.",
+        ),
+    );
+
+    const group = `timer-${wizard.server}-${wizard.user}`;
+    const every = document.createElement("input");
+    every.type = "radio";
+    every.name = group;
+    const daily = document.createElement("input");
+    daily.type = "radio";
+    daily.name = group;
+    const interval = document.createElement("input");
+    interval.type = "text";
+    interval.value = "6 hours";
+    interval.autocomplete = "off";
+    interval.spellcheck = false;
+    const time = document.createElement("input");
+    time.type = "time";
+    time.value = "01:00";
+    const raw = sub?.timer || "";
+    if (/^\d+$/.test(raw)) {
+        every.checked = true;
+        interval.value = formatInterval(Number(raw));
+    } else if (/^\d{1,2}:\d{2}$/.test(raw)) {
+        daily.checked = true;
+        const [hour, minute] = raw.split(":");
+        time.value = `${hour.padStart(2, "0")}:${minute}`;
+    } else {
+        every.checked = true;
+    }
+
+    const everyBox = node("div", "choice");
+    const everyLabel = node("label");
+    everyLabel.append(every, document.createTextNode(" Back up after an interval"));
+    const everyDetail = node("div", "detail");
+    everyDetail.append(interval, node("p", "hint", "Examples: 6 hours, 90 minutes. At most every 24 hours."));
+    everyBox.append(everyLabel, everyDetail);
+
+    const dailyBox = node("div", "choice");
+    const dailyLabel = node("label");
+    dailyLabel.append(daily, document.createTextNode(" Back up at a certain time every day"));
+    const dailyDetail = node("div", "detail");
+    dailyDetail.append(time, node("p", "hint", "24-hour time, such as 01:00 or 18:30."));
+    dailyBox.append(dailyLabel, dailyDetail);
+
+    const error = node("p", "error", "");
+    const saveTimer = async (timer) => {
+        await api("/api/timer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ server: wizard.server, user: wizard.user, timer }),
+        });
+        await refreshInfo();
+        showOverview(findSub(wizard.server, wizard.user), overviewFlags());
+    };
+    const next = btn(editing ? "Save" : "Next", "", async () => {
+        setError(error, "");
+        try {
+            let timer = "";
+            if (every.checked) {
+                const minutes = parseInterval(interval.value);
+                interval.value = formatInterval(minutes);
+                timer = String(minutes);
+            } else if (daily.checked) {
+                if (!time.value) throw new Error("Choose a time, such as 01:00.");
+                timer = time.value;
+            } else {
+                throw new Error("Choose interval or daily backup.");
+            }
+            next.disabled = true;
+            await saveTimer(timer);
+        } catch (err) {
+            setError(error, err.message);
+            next.disabled = false;
+        }
+    });
+    const secondary = editing
+        ? btn("Disable", "quiet", async () => {
+            secondary.disabled = true;
+            try {
+                await saveTimer("");
+            } catch (err) {
+                setError(error, err.message);
+                secondary.disabled = false;
+            }
+        })
+        : btn("Skip", "quiet", async () => {
+            secondary.disabled = true;
+            try {
+                await saveTimer("");
+            } catch (err) {
+                setError(error, err.message);
+                secondary.disabled = false;
+            }
+        });
+    const back = editing
+        ? btn("Cancel", "quiet", () => showOverview(findSub(wizard.server, wizard.user), overviewFlags()))
+        : btn("Back", "quiet", showFolderList);
+    screenEl.append(everyBox, dailyBox, error, actionsBar(back, secondary, "spacer", next));
+}
+
+function overviewFlags() {
+    return { showAdd: (page.subscriptions || []).length === 1 };
+}
+
+function showSubscriptionList() {
+    current = "list";
+    wizard = null;
+    clearScreen();
+    screenEl.append(
+        node("h2", "", "Your subscriptions"),
+        node("p", "copy", "Open a subscription to manage its drive mount and automatic backup."),
+    );
+    const list = node("ul", "list");
+    for (const sub of page.subscriptions) {
+        const item = node("li", "");
+        const link = textLink(`${sub.server} · ${sub.user}`, () => {
+            wizard = { server: sub.server, user: sub.user, mode: "edit" };
+            showOverview(sub, { showAdd: false });
+        });
+        link.className = "title text-link";
+        const meta = node("p", "meta", statsLine(sub));
+        item.append(link, meta);
+        list.append(item);
+    }
+    screenEl.append(
+        list,
+        actionsBar("spacer", textLink("Add subscription", startWizard)),
+        node("p", "nav-note", "You can open this page any time with deppo --ui."),
+    );
+}
+
+function ranAtDate(text) {
+    const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(text || "");
+    if (!match) return null;
+    return new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5]),
+        Number(match[6]),
+    );
+}
+
+function startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function ago(date) {
+    const seconds = Math.max(0, (Date.now() - date.getTime()) / 1000);
+    if (seconds < 30) return "now";
+    const dayDiff = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
+    if (dayDiff === 1) return "yesterday";
+    if (dayDiff >= 2) return unit(dayDiff, "day");
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return unit(Math.max(1, minutes), "minute");
+    return unit(Math.max(1, Math.round(seconds / 3600)), "hour");
+}
+
+function unit(count, name) {
+    return `${count} ${name}${count === 1 ? "" : "s"} ago`;
+}
+
+function statsLine(sub) {
+    const files = Number(sub.filesBackedUp) || 0;
+    const fileText = `${files} file${files === 1 ? "" : "s"} backed up`;
+    const when = ranAtDate(sub.lastBackup);
+    if (when) return `Last backup ${ago(when)} · ${fileText}`;
+    if (files > 0) return fileText;
+    return "No backup yet";
+}
+
+function showOverview(sub, { showAdd }) {
+    if (!sub) {
+        goHome();
+        return;
+    }
+    current = "overview";
+    wizard = { server: sub.server, user: sub.user, mode: wizard?.mode || "edit" };
+    clearScreen();
+    const head = node("div", "overview-head");
+    head.append(node("h2", "overview-title", sub.user));
+    head.append(node("span", "overview-server", sub.server));
+    const remove = textLink("Remove", async () => {
+        if (!confirm(`Remove subscription ${sub.user} on ${sub.server} from this computer?`)) return;
+        await api("/api/subscriptions", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ server: sub.server, user: sub.user }),
+        });
+        await refreshInfo();
+        goHome();
+    });
+    remove.classList.add("overview-remove");
+    head.append(remove);
+    screenEl.append(head, node("p", "stats", statsLine(sub)));
+
+    const mountSection = node("div", "section");
+    mountSection.append(node("h3", "section-title", "Drive mount"));
+    if (sub.mount) {
+        const row = node("div", "inline-row");
+        row.append(node("span", "path", sub.mount));
+        const links = node("span", "links");
+        links.append(
+            textLink("Edit", () => showMountAsk({ editing: true })),
+            textLink("Delete", async () => {
+                if (!confirm("Remove the drive mount for this subscription?")) return;
+                await api("/api/mount", {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ server: sub.server, user: sub.user }),
+                });
+                await refreshInfo();
+                showOverview(findSub(sub.server, sub.user), { showAdd });
+            }),
+        );
+        row.append(links);
+        mountSection.append(row);
+    } else {
+        const row = node("div", "inline-row");
+        row.append(node("span", "path", "No drive mount"));
+        row.append(textLink("Set up a drive mount", () => showMountAsk({ editing: true })));
+        mountSection.append(row);
+    }
+    screenEl.append(mountSection);
+
+    const backupSection = node("div", "section");
+    backupSection.append(node("h3", "section-title", "Automatic backup"));
+    const stack = node("div", "stack");
+
+    const timerRow = node("div", "stack-row");
+    timerRow.append(node("span", "path", timerLabel(sub.timer)));
+    const timerLinks = node("span", "links");
+    if (sub.timer) {
+        timerLinks.append(
+            textLink("Edit", () => {
+                if (!sub.folders.length) showBackupAsk({ editing: true });
+                else showTimer({ editing: true });
+            }),
+        );
+    } else {
+        timerLinks.append(textLink("Set up automatic backup", () => showBackupAsk({ editing: true })));
+    }
+    timerRow.append(timerLinks);
+    stack.append(timerRow);
+
+    if (sub.folders.length) {
+        for (const folder of sub.folders) {
+            const item = node("div", "stack-row");
+            item.append(node("span", "folder-path", folder.path));
+            item.append(
+                textLink("Delete", async () => {
+                    if (!confirm(`Remove ${folder.path} from backup? The folder on disk stays.`)) return;
+                    await api("/api/folders", {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ server: sub.server, user: sub.user, path: folder.path }),
+                    });
+                    await refreshInfo();
+                    showOverview(findSub(sub.server, sub.user), { showAdd });
+                }),
+            );
+            stack.append(item);
+        }
+    } else {
+        stack.append(node("div", "stack-row", "No backup folders yet."));
+    }
+    const addRow = node("div", "stack-row add-folder");
+    addRow.append(textLink("Add a folder", () => showFolderAdd({ fromOverview: true })));
+    stack.append(addRow);
+    backupSection.append(stack);
+    screenEl.append(backupSection);
+
+    const log = node("div", "run-log");
+    log.hidden = true;
+    const saved = logs.get(keyOf(sub));
+    if (saved?.length) {
+        log.hidden = false;
+        for (const line of saved) log.append(node("div", line.bad ? "log-line bad" : "log-line", line.text));
+    }
+    const runError = node("p", "error", "");
+    const backupNow = btn(page.running ? "Backing up…" : "Backup now", "", () => runBackup(sub, runError));
+    backupNow.classList.add("backup");
+    backupNow.disabled = page.running || !sub.folders.length;
+    const close = btn("Close", "quiet", () => {
+        window.close();
+        pageError.textContent = "You can close this browser tab. Deppo keeps running in the background.";
+    });
+    const bottomLeft = [];
+    if ((page.subscriptions || []).length > 1) {
+        bottomLeft.push(btn("All subscriptions", "quiet", () => {
+            refreshInfo().then(showSubscriptionList);
         }));
-        addForm.credentials.value = "";
-        await load();
+    }
+    if (showAdd) bottomLeft.push(textLink("Add subscription", startWizard));
+    screenEl.append(actionsBar(...bottomLeft, "spacer", backupNow, close), log, runError);
+}
+
+async function runBackup(sub, errorEl) {
+    setError(errorEl, "");
+    if (!sub.folders.length) {
+        setError(errorEl, "Add a folder before backing up.");
+        return;
+    }
+    activeKey = keyOf(sub);
+    setRunning(true);
+    try {
+        await api("/api/backup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ server: sub.server, user: sub.user }),
+        });
     } catch (err) {
-        addError.textContent = err.message;
+        setRunning(false);
+        setError(errorEl, err.message);
+    }
+}
+
+function setRunning(running) {
+    page.running = running;
+    for (const button of document.querySelectorAll("button.backup")) {
+        button.disabled = running;
+        button.textContent = running ? "Backing up…" : "Backup now";
+    }
+}
+
+function appendLog(row) {
+    if (row.id <= lastEvent) return;
+    lastEvent = row.id;
+    if (row.run !== shownRun) {
+        shownRun = row.run;
+        logs.set(activeKey, []);
+        const currentLog = document.querySelector(".run-log");
+        if (currentLog) currentLog.replaceChildren();
+        setRunning(true);
+    }
+    const bad = /^(fail |skip |deppo:)/.test(row.text);
+    const bucket = logs.get(activeKey) || [];
+    bucket.push({ text: row.text, bad });
+    while (bucket.length > 2000) bucket.shift();
+    logs.set(activeKey, bucket);
+    const log = document.querySelector(".run-log");
+    if (!log) return;
+    log.hidden = false;
+    log.append(node("div", bad ? "log-line bad" : "log-line", row.text));
+    while (log.childElementCount > 2000) log.firstElementChild.remove();
+    log.scrollTop = log.scrollHeight;
+}
+
+events.addEventListener("log", (ev) => appendLog(JSON.parse(ev.data)));
+events.addEventListener("done", async (ev) => {
+    const row = JSON.parse(ev.data);
+    if (row.id <= lastEvent) return;
+    lastEvent = row.id;
+    setRunning(false);
+    try {
+        await refreshInfo();
+        if (current === "overview" && wizard) {
+            showOverview(findSub(wizard.server, wizard.user), overviewFlags());
+        }
+    } catch (err) {
+        pageError.textContent = err.message;
     }
 });
 
-load().catch((err) => {
-    addError.textContent = err.message;
+document.querySelector("#startup-enable").addEventListener("click", async () => {
+    startupError.textContent = "";
+    try {
+        await api("/api/startup", { method: "POST" });
+        await refreshInfo();
+    } catch (err) {
+        startupError.textContent = err.message;
+    }
 });
+
+refreshInfo()
+    .then(goHome)
+    .catch((err) => {
+        pageError.textContent = err.message;
+    });

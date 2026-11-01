@@ -133,6 +133,10 @@ fn respond(app: &Arc<App>, method: &str, path: &str, query: &str, body: &[u8]) -
             Ok(value) => json_status(200, value),
             Err(err) => json_status(400, json!({ "error": err })),
         },
+        ("DELETE", "/api/mount") => match clear_mount(body) {
+            Ok(()) => json_status(200, json!({ "ok": true })),
+            Err(err) => json_status(400, json!({ "error": err })),
+        },
         ("POST", "/api/startup") => match enable_startup() {
             Ok(()) => json_status(200, json!({ "ok": true })),
             Err(err) => json_status(400, json!({ "error": err })),
@@ -146,11 +150,15 @@ fn respond(app: &Arc<App>, method: &str, path: &str, query: &str, body: &[u8]) -
             Err(err) => json_status(if err == "A backup is already running." { 409 } else { 400 }, json!({ "error": err })),
         },
         ("POST", "/api/folders") => match folder_target(body).and_then(|(sub, path)| add_folder(&sub, &path)) {
-            Ok(path) => json_status(200, json!({ "path": path })),
+            Ok(value) => json_status(200, value),
             Err(err) => json_status(400, json!({ "error": err })),
         },
         ("DELETE", "/api/folders") => match folder_target(body).and_then(|(sub, path)| remove_folder(&sub, &path)) {
             Ok(()) => json_status(200, json!({ "ok": true })),
+            Err(err) => json_status(400, json!({ "error": err })),
+        },
+        ("GET", "/api/folder-bytes") => match folder_bytes(&query_value(query, "server"), &query_value(query, "user"), &query_value(query, "path")) {
+            Ok(value) => json_status(200, value),
             Err(err) => json_status(400, json!({ "error": err })),
         },
         ("GET", "/api/ignore") => match read_ignore(&query_value(query, "server"), &query_value(query, "user"), &query_value(query, "path")) {
@@ -180,6 +188,18 @@ fn info(app: &App) -> Value {
 
 fn subscription_info(sub: &Subscription, log: &str) -> Value {
     let folders: Vec<Value> = sub.folders.iter().map(|folder| folder_info(folder, log)).collect();
+    let mut last_backup = String::new();
+    let mut files_backed_up = 0u64;
+    for folder in &folders {
+        if let Some(cached) = folder.get("cached").and_then(Value::as_u64) {
+            files_backed_up = files_backed_up.saturating_add(cached);
+        }
+        if let Some(ran_at) = folder.get("ranAt").and_then(Value::as_str) {
+            if !ran_at.is_empty() && (last_backup.is_empty() || ran_at > last_backup.as_str()) {
+                last_backup = ran_at.to_string();
+            }
+        }
+    }
     json!({
         "server": sub.server_key,
         "serverUrl": sub.server,
@@ -188,6 +208,8 @@ fn subscription_info(sub: &Subscription, log: &str) -> Value {
         "timer": sub.timer,
         "password": !sub.password.is_empty(),
         "folders": folders,
+        "lastBackup": last_backup,
+        "filesBackedUp": files_backed_up,
     })
 }
 
@@ -234,6 +256,13 @@ fn assign_mount(body: &[u8]) -> Result<Value, String> {
     config::save_mount(&sub.server_key, &sub.user, &mount).map_err(|err| format!("{err:#}"))?;
     host::notify_mount();
     Ok(json!({ "mount": mount }))
+}
+
+fn clear_mount(body: &[u8]) -> Result<(), String> {
+    let (sub, _) = named(body)?;
+    config::save_mount(&sub.server_key, &sub.user, "").map_err(|err| format!("{err:#}"))?;
+    host::notify_mount();
+    Ok(())
 }
 
 fn enable_startup() -> Result<(), String> {
@@ -332,16 +361,41 @@ fn folder_info(folder: &Path, log: &str) -> Value {
     })
 }
 
-fn add_folder(sub: &Subscription, raw: &str) -> Result<String, String> {
+fn add_folder(sub: &Subscription, raw: &str) -> Result<Value, String> {
     let folder = valid_folder(raw)?;
     if sub.folders.iter().any(|have| paths_equal(have, &folder)) {
         return Err(format!("Already listed: {}", folder.display()));
     }
+    let ignore_path = folder.join(".deppoignore");
+    let wrote_ignore = if !ignore_path.is_file() {
+        fs::write(&ignore_path, IGNORE_TEMPLATE).map_err(|err| format!("write {}: {err}", ignore_path.display()))?;
+        true
+    } else {
+        false
+    };
     let mut folders = sub.folders.clone();
     folders.push(folder.clone());
     config::save_folders(&sub.server_key, &sub.user, &folders).map_err(|err| format!("{err:#}"))?;
     host::notify_mount();
-    Ok(folder.display().to_string())
+    let (files, bytes) = upload::measure_folder(&folder).unwrap_or((0, 0));
+    Ok(json!({
+        "path": folder.display().to_string(),
+        "ignorePath": ignore_path.display().to_string(),
+        "ignoreCreated": wrote_ignore,
+        "files": files,
+        "bytes": bytes,
+    }))
+}
+
+fn folder_bytes(server: &str, user: &str, raw: &str) -> Result<Value, String> {
+    let sub = load_sub(server, user)?;
+    let folder = configured(&sub, raw)?;
+    let (files, bytes) = upload::measure_folder(folder).map_err(|err| format!("{err:#}"))?;
+    Ok(json!({
+        "path": folder.display().to_string(),
+        "files": files,
+        "bytes": bytes,
+    }))
 }
 
 fn remove_folder(sub: &Subscription, raw: &str) -> Result<(), String> {
@@ -442,8 +496,7 @@ fn latest_run(log: &str, folder: &Path) -> Run {
     let mut found = None;
     for line in log.lines() {
         let line = line.trim();
-        let rest = strip_stamp(line);
-        let ran_at = log_stamp(line).unwrap_or("").to_string();
+        let (ran_at, rest) = split_stamp(line);
         if rest == display {
             found = Some(Run { counts: Counts::default(), summary: "Nothing to send.".to_string(), ran_at });
         } else if let Some(summary) = rest.strip_prefix(&display).and_then(|tail| tail.strip_prefix(": ")) {
@@ -453,7 +506,25 @@ fn latest_run(log: &str, folder: &Path) -> Run {
     found.unwrap_or_default()
 }
 
-fn has_stamp(bytes: &[u8]) -> bool {
+fn split_stamp(line: &str) -> (String, &str) {
+    let bytes = line.as_bytes();
+    if has_datetime_stamp(bytes) {
+        return (line[..19].to_string(), &line[20..]);
+    }
+    // Older Linux builds wrote unix seconds, e.g. "1793518138 /path: …".
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if (9..=11).contains(&i) && i < bytes.len() && bytes[i] == b' ' {
+        if let Ok(secs) = line[..i].parse::<i64>() {
+            return (format_unix_local(secs), &line[i + 1..]);
+        }
+    }
+    (String::new(), line)
+}
+
+fn has_datetime_stamp(bytes: &[u8]) -> bool {
     bytes.len() > 20
         && bytes[4] == b'-'
         && bytes[7] == b'-'
@@ -469,12 +540,24 @@ fn has_stamp(bytes: &[u8]) -> bool {
         && bytes[17..19].iter().all(u8::is_ascii_digit)
 }
 
-fn log_stamp(line: &str) -> Option<&str> {
-    has_stamp(line.as_bytes()).then_some(&line[..19])
-}
-
-fn strip_stamp(line: &str) -> &str {
-    if has_stamp(line.as_bytes()) { &line[20..] } else { line }
+fn format_unix_local(secs: i64) -> String {
+    unsafe {
+        let mut now = secs;
+        let tm = libc::localtime(&mut now);
+        if tm.is_null() {
+            return String::new();
+        }
+        let tm = *tm;
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            tm.tm_year + 1900,
+            tm.tm_mon + 1,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec
+        )
+    }
 }
 
 fn parse_counts(summary: &str) -> Counts {
@@ -651,6 +734,17 @@ fn write_ping(stream: &mut TcpStream) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unix_stamp_lines_are_recognized() {
+        let folder = Path::new("/mnt/d/DEV");
+        let log = format!("1793518138 {}: uploaded 10, unchanged 42848\n", folder.display());
+        let run = latest_run(&log, folder);
+        assert_eq!(run.counts.uploaded, 10);
+        assert_eq!(run.counts.unchanged, 42848);
+        assert!(!run.ran_at.is_empty());
+        assert!(run.ran_at.contains('-'), "{}", run.ran_at);
+    }
 
     #[test]
     fn the_last_matching_log_line_is_the_chart() {
