@@ -1,3 +1,11 @@
+deppo (1.0.8-1) jammy; urgency=medium
+
+  * Version 1.0.8.
+  * Wizard-style local UI for setup and subscription overview.
+  * Show last backup as a relative time.
+
+ -- Deppo <info@deppo.eu>  Sun, 01 Nov 2026 07:36:00 +0000
+
 deppo (1.0.7-1) jammy; urgency=medium
 
   * Version 1.0.7.
